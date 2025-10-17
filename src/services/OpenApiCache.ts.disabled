@@ -1,0 +1,518 @@
+import * as vscode from 'vscode';
+import axios from 'axios';
+import { Logger } from '../utils/logger';
+
+export interface OpenApiSpec {
+  id: string;
+  name: string;
+  type: 'converge' | 'l1';
+  version: string;
+  source: 'file' | 'url';
+  sourceLocation: string;
+  loadedAt: Date;
+  lastModified?: Date;
+  spec: any; // The actual OpenAPI specification object
+  endpoints: OpenApiEndpoint[];
+  schemas: OpenApiSchema[];
+}
+
+export interface OpenApiEndpoint {
+  id: string;
+  path: string;
+  method: string;
+  operationId?: string;
+  summary?: string;
+  description?: string;
+  parameters: OpenApiParameter[];
+  requestBody?: OpenApiRequestBody;
+  responses: OpenApiResponse[];
+  tags?: string[];
+}
+
+export interface OpenApiParameter {
+  name: string;
+  in: 'query' | 'header' | 'path' | 'cookie';
+  required: boolean;
+  schema: OpenApiSchema;
+  description?: string;
+}
+
+export interface OpenApiRequestBody {
+  required: boolean;
+  content: { [mediaType: string]: { schema: OpenApiSchema } };
+  description?: string;
+}
+
+export interface OpenApiResponse {
+  statusCode: string;
+  description: string;
+  content?: { [mediaType: string]: { schema: OpenApiSchema } };
+}
+
+export interface OpenApiSchema {
+  id: string;
+  name: string;
+  type: string;
+  format?: string;
+  description?: string;
+  required?: string[];
+  properties?: { [key: string]: OpenApiSchema };
+  items?: OpenApiSchema;
+  enum?: any[];
+  example?: any;
+  $ref?: string;
+}
+
+export class OpenApiCache {
+  private static readonly CACHE_KEY = 'l1x.openapi.cache';
+  private static readonly MAX_CACHE_SIZE = 50 * 1024 * 1024; // 50MB
+  private static readonly CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
+  private specs: Map<string, OpenApiSpec> = new Map();
+
+  constructor(private context: vscode.ExtensionContext) {
+    this.loadFromCache();
+  }
+
+  async loadSpecFromFile(filePath: string, type: 'converge' | 'l1', name?: string): Promise<OpenApiSpec> {
+    try {
+      Logger.info(`Loading OpenAPI spec from file: ${filePath}`);
+
+      const uri = vscode.Uri.file(filePath);
+      const fileContent = await vscode.workspace.fs.readFile(uri);
+      const content = Buffer.from(fileContent).toString('utf8');
+
+      let specObject: any;
+      try {
+        specObject = JSON.parse(content);
+      } catch (jsonError) {
+        // Try YAML parsing if JSON fails
+        const yaml = require('js-yaml');
+        specObject = yaml.load(content);
+      }
+
+      const spec = await this.processSpecification(specObject, {
+        type,
+        source: 'file',
+        sourceLocation: filePath,
+        name: name || this.extractSpecName(specObject, filePath)
+      });
+
+      this.specs.set(spec.id, spec);
+      await this.saveToCache();
+
+      Logger.info(`Successfully loaded OpenAPI spec: ${spec.name}`);
+      return spec;
+
+    } catch (error) {
+      Logger.error('Failed to load OpenAPI spec from file', error as Error);
+      throw new Error(`Failed to load OpenAPI specification: ${(error as Error).message}`);
+    }
+  }
+
+  async loadSpecFromUrl(url: string, type: 'converge' | 'l1', name?: string): Promise<OpenApiSpec> {
+    try {
+      Logger.info(`Loading OpenAPI spec from URL: ${url}`);
+
+      const response = await axios.get(url, {
+        timeout: 30000,
+        headers: {
+          'Accept': 'application/json, application/yaml, text/yaml',
+          'User-Agent': 'L1X-ElavonX-Migrator/1.0'
+        }
+      });
+
+      let specObject: any;
+      if (typeof response.data === 'string') {
+        try {
+          specObject = JSON.parse(response.data);
+        } catch (jsonError) {
+          const yaml = require('js-yaml');
+          specObject = yaml.load(response.data);
+        }
+      } else {
+        specObject = response.data;
+      }
+
+      const spec = await this.processSpecification(specObject, {
+        type,
+        source: 'url',
+        sourceLocation: url,
+        name: name || this.extractSpecName(specObject, url)
+      });
+
+      this.specs.set(spec.id, spec);
+      await this.saveToCache();
+
+      Logger.info(`Successfully loaded OpenAPI spec: ${spec.name}`);
+      return spec;
+
+    } catch (error) {
+      Logger.error('Failed to load OpenAPI spec from URL', error as Error);
+      throw new Error(`Failed to load OpenAPI specification: ${(error as Error).message}`);
+    }
+  }
+
+  getSpec(specId: string): OpenApiSpec | undefined {
+    return this.specs.get(specId);
+  }
+
+  getAllSpecs(): OpenApiSpec[] {
+    return Array.from(this.specs.values());
+  }
+
+  getSpecsByType(type: 'converge' | 'l1'): OpenApiSpec[] {
+    return Array.from(this.specs.values()).filter(spec => spec.type === type);
+  }
+
+  async removeSpec(specId: string): Promise<void> {
+    if (this.specs.delete(specId)) {
+      await this.saveToCache();
+      Logger.info(`Removed OpenAPI spec: ${specId}`);
+    }
+  }
+
+  async clearCache(): Promise<void> {
+    this.specs.clear();
+    await this.context.globalState.update(OpenApiCache.CACHE_KEY, undefined);
+    Logger.info('OpenAPI cache cleared');
+  }
+
+  async refreshSpec(specId: string): Promise<OpenApiSpec> {
+    const existingSpec = this.specs.get(specId);
+    if (!existingSpec) {
+      throw new Error('Specification not found');
+    }
+
+    if (existingSpec.source === 'url') {
+      return await this.loadSpecFromUrl(existingSpec.sourceLocation, existingSpec.type, existingSpec.name);
+    } else {
+      return await this.loadSpecFromFile(existingSpec.sourceLocation, existingSpec.type, existingSpec.name);
+    }
+  }
+
+  getCacheStats(): { count: number; totalSize: number; oldestSpec?: Date; newestSpec?: Date } {
+    const specs = Array.from(this.specs.values());
+    const totalSize = JSON.stringify(Array.from(this.specs.entries())).length;
+    
+    const dates = specs.map(spec => spec.loadedAt).sort((a, b) => a.getTime() - b.getTime());
+    
+    return {
+      count: specs.length,
+      totalSize,
+      oldestSpec: dates[0],
+      newestSpec: dates[dates.length - 1]
+    };
+  }
+
+  private async processSpecification(specObject: any, metadata: {
+    type: 'converge' | 'l1';
+    source: 'file' | 'url';
+    sourceLocation: string;
+    name: string;
+  }): Promise<OpenApiSpec> {
+    
+    // Validate OpenAPI specification
+    this.validateOpenApiSpec(specObject);
+
+    const spec: OpenApiSpec = {
+      id: this.generateSpecId(metadata.name, metadata.type),
+      name: metadata.name,
+      type: metadata.type,
+      version: specObject.info?.version || '1.0.0',
+      source: metadata.source,
+      sourceLocation: metadata.sourceLocation,
+      loadedAt: new Date(),
+      spec: specObject,
+      endpoints: [],
+      schemas: []
+    };
+
+    // Process endpoints
+    spec.endpoints = this.extractEndpoints(specObject);
+    
+    // Process schemas
+    spec.schemas = this.extractSchemas(specObject);
+
+    return spec;
+  }
+
+  private validateOpenApiSpec(spec: any): void {
+    if (!spec || typeof spec !== 'object') {
+      throw new Error('Invalid OpenAPI specification: not an object');
+    }
+
+    if (!spec.openapi && !spec.swagger) {
+      throw new Error('Invalid OpenAPI specification: missing openapi or swagger version');
+    }
+
+    if (!spec.info) {
+      throw new Error('Invalid OpenAPI specification: missing info section');
+    }
+
+    if (!spec.paths) {
+      throw new Error('Invalid OpenAPI specification: missing paths section');
+    }
+  }
+
+  private extractEndpoints(spec: any): OpenApiEndpoint[] {
+    const endpoints: OpenApiEndpoint[] = [];
+
+    if (!spec.paths) {
+      return endpoints;
+    }
+
+    for (const [path, pathItem] of Object.entries(spec.paths)) {
+      if (!pathItem || typeof pathItem !== 'object') continue;
+
+      const methods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'];
+      
+      for (const method of methods) {
+        const operation = (pathItem as any)[method];
+        if (!operation) continue;
+
+        const endpoint: OpenApiEndpoint = {
+          id: `${method.toUpperCase()}_${path.replace(/[^a-zA-Z0-9]/g, '_')}`,
+          path,
+          method: method.toUpperCase(),
+          operationId: operation.operationId,
+          summary: operation.summary,
+          description: operation.description,
+          parameters: this.extractParameters(operation.parameters || [], spec),
+          responses: this.extractResponses(operation.responses || {}, spec),
+          tags: operation.tags || []
+        };
+
+        if (operation.requestBody) {
+          endpoint.requestBody = this.extractRequestBody(operation.requestBody, spec);
+        }
+
+        endpoints.push(endpoint);
+      }
+    }
+
+    return endpoints;
+  }
+
+  private extractParameters(parameters: any[], spec: any): OpenApiParameter[] {
+    return parameters.map(param => {
+      const resolvedParam = this.resolveReference(param, spec);
+      return {
+        name: resolvedParam.name,
+        in: resolvedParam.in,
+        required: resolvedParam.required || false,
+        schema: this.extractSchemaFromParameter(resolvedParam.schema || {}, spec),
+        description: resolvedParam.description
+      };
+    });
+  }
+
+  private extractRequestBody(requestBody: any, spec: any): OpenApiRequestBody {
+    const resolvedBody = this.resolveReference(requestBody, spec);
+    const content: { [mediaType: string]: { schema: OpenApiSchema } } = {};
+
+    if (resolvedBody.content) {
+      for (const [mediaType, mediaTypeObject] of Object.entries(resolvedBody.content)) {
+        const mediaObj = mediaTypeObject as any;
+        if (mediaObj.schema) {
+          content[mediaType] = {
+            schema: this.extractSchemaFromParameter(mediaObj.schema, spec)
+          };
+        }
+      }
+    }
+
+    return {
+      required: resolvedBody.required || false,
+      content,
+      description: resolvedBody.description
+    };
+  }
+
+  private extractResponses(responses: any, spec: any): OpenApiResponse[] {
+    const responseList: OpenApiResponse[] = [];
+
+    for (const [statusCode, response] of Object.entries(responses)) {
+      const resolvedResponse = this.resolveReference(response, spec);
+      const responseObj: OpenApiResponse = {
+        statusCode,
+        description: resolvedResponse.description || ''
+      };
+
+      if (resolvedResponse.content) {
+        responseObj.content = {};
+        for (const [mediaType, mediaTypeObject] of Object.entries(resolvedResponse.content)) {
+          const mediaObj = mediaTypeObject as any;
+          if (mediaObj.schema) {
+            responseObj.content[mediaType] = {
+              schema: this.extractSchemaFromParameter(mediaObj.schema, spec)
+            };
+          }
+        }
+      }
+
+      responseList.push(responseObj);
+    }
+
+    return responseList;
+  }
+
+  private extractSchemas(spec: any): OpenApiSchema[] {
+    const schemas: OpenApiSchema[] = [];
+
+    // Extract from components/schemas (OpenAPI 3.0)
+    if (spec.components?.schemas) {
+      for (const [name, schema] of Object.entries(spec.components.schemas)) {
+        schemas.push(this.convertToOpenApiSchema(name, schema as any, spec));
+      }
+    }
+
+    // Extract from definitions (Swagger 2.0)
+    if (spec.definitions) {
+      for (const [name, schema] of Object.entries(spec.definitions)) {
+        schemas.push(this.convertToOpenApiSchema(name, schema as any, spec));
+      }
+    }
+
+    return schemas;
+  }
+
+  private convertToOpenApiSchema(name: string, schema: any, spec: any): OpenApiSchema {
+    const resolvedSchema = this.resolveReference(schema, spec);
+    
+    const openApiSchema: OpenApiSchema = {
+      id: name,
+      name,
+      type: resolvedSchema.type || 'object',
+      format: resolvedSchema.format,
+      description: resolvedSchema.description,
+      required: resolvedSchema.required,
+      enum: resolvedSchema.enum,
+      example: resolvedSchema.example
+    };
+
+    if (resolvedSchema.properties) {
+      openApiSchema.properties = {};
+      for (const [propName, propSchema] of Object.entries(resolvedSchema.properties)) {
+        openApiSchema.properties[propName] = this.extractSchemaFromParameter(propSchema as any, spec);
+      }
+    }
+
+    if (resolvedSchema.items) {
+      openApiSchema.items = this.extractSchemaFromParameter(resolvedSchema.items, spec);
+    }
+
+    return openApiSchema;
+  }
+
+  private extractSchemaFromParameter(schema: any, spec: any): OpenApiSchema {
+    const resolvedSchema = this.resolveReference(schema, spec);
+    
+    return {
+      id: resolvedSchema.title || 'inline',
+      name: resolvedSchema.title || 'inline',
+      type: resolvedSchema.type || 'string',
+      format: resolvedSchema.format,
+      description: resolvedSchema.description,
+      required: resolvedSchema.required,
+      enum: resolvedSchema.enum,
+      example: resolvedSchema.example,
+      $ref: schema.$ref
+    };
+  }
+
+  private resolveReference(obj: any, spec: any): any {
+    if (!obj || !obj.$ref) {
+      return obj;
+    }
+
+    const refPath = obj.$ref.replace('#/', '').split('/');
+    let resolved = spec;
+    
+    for (const segment of refPath) {
+      resolved = resolved[segment];
+      if (!resolved) {
+        Logger.warn(`Could not resolve reference: ${obj.$ref}`);
+        return obj;
+      }
+    }
+
+    return resolved;
+  }
+
+  private extractSpecName(spec: any, fallbackPath: string): string {
+    if (spec.info?.title) {
+      return spec.info.title;
+    }
+
+    // Extract name from file path or URL
+    const pathParts = fallbackPath.split(/[/\\]/);
+    const fileName = pathParts[pathParts.length - 1];
+    return fileName.replace(/\.(json|yaml|yml)$/i, '');
+  }
+
+  private generateSpecId(name: string, type: 'converge' | 'l1'): string {
+    const sanitizedName = name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    return `${type}_${sanitizedName}_${Date.now()}`;
+  }
+
+  private async loadFromCache(): Promise<void> {
+    try {
+      const cachedData = this.context.globalState.get<[string, OpenApiSpec][]>(OpenApiCache.CACHE_KEY);
+      if (cachedData) {
+        // Filter out expired entries
+        const now = Date.now();
+        const validEntries = cachedData.filter(([_, spec]) => {
+          const age = now - new Date(spec.loadedAt).getTime();
+          return age < OpenApiCache.CACHE_EXPIRY;
+        });
+
+        this.specs = new Map(validEntries);
+        Logger.info(`Loaded ${this.specs.size} OpenAPI specs from cache`);
+      }
+    } catch (error) {
+      Logger.error('Failed to load OpenAPI cache', error as Error);
+      this.specs.clear();
+    }
+  }
+
+  private async saveToCache(): Promise<void> {
+    try {
+      const cacheData = Array.from(this.specs.entries());
+      const cacheSize = JSON.stringify(cacheData).length;
+
+      if (cacheSize > OpenApiCache.MAX_CACHE_SIZE) {
+        // Remove oldest entries to stay under size limit
+        const sortedSpecs = Array.from(this.specs.entries())
+          .sort(([, a], [, b]) => a.loadedAt.getTime() - b.loadedAt.getTime());
+
+        this.specs.clear();
+        let currentSize = 0;
+        
+        for (let i = sortedSpecs.length - 1; i >= 0; i--) {
+          const [id, spec] = sortedSpecs[i];
+          const entrySize = JSON.stringify([id, spec]).length;
+          
+          if (currentSize + entrySize > OpenApiCache.MAX_CACHE_SIZE) {
+            break;
+          }
+          
+          this.specs.set(id, spec);
+          currentSize += entrySize;
+        }
+
+        Logger.warn(`Cache size exceeded limit, kept ${this.specs.size} most recent specs`);
+      }
+
+      await this.context.globalState.update(OpenApiCache.CACHE_KEY, Array.from(this.specs.entries()));
+      Logger.info(`Saved ${this.specs.size} OpenAPI specs to cache`);
+
+    } catch (error) {
+      Logger.error('Failed to save OpenAPI cache', error as Error);
+    }
+  }
+
+  dispose(): void {
+    // Cleanup if needed
+  }
+}

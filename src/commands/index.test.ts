@@ -48,8 +48,8 @@ describe('CommandRegistry', () => {
       expect(registerCommandSpy).toHaveBeenCalledWith('l1x.apply', expect.any(Function));
       expect(registerCommandSpy).toHaveBeenCalledWith('l1x.rollback', expect.any(Function));
       
-      // Should register 14 commands total
-      expect(registerCommandSpy).toHaveBeenCalledTimes(14);
+      // Should register 17 commands total (added testCredentialSet, openCredentialsEditor, and editCredentialField)
+      expect(registerCommandSpy).toHaveBeenCalledTimes(17);
     });
   });
 
@@ -97,8 +97,8 @@ describe('CommandRegistry', () => {
       commandRegistry.registerAllCommands();
       commandRegistry.dispose();
       
-      // Should dispose all 14 commands
-      expect(mockDisposable.dispose).toHaveBeenCalledTimes(14);
+      // Should dispose all 17 commands
+      expect(mockDisposable.dispose).toHaveBeenCalledTimes(17);
     });
   });
 });

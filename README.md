@@ -26,10 +26,14 @@ The L1X ElavonX Migrator is a comprehensive VS Code extension that streamlines t
 - **Context Menu Actions**: Right-click to initiate migrations directly from scan results
 
 ### 🔑 **Credentials Panel**
-- **Environment Management**: Separate UAT and Production credential sets
-- **Secure Storage**: Uses VS Code's SecretStorage API for maximum security
-- **Interactive Management**: Add, delete, and test credentials with professional dialogs
-- **Connection Testing**: Real-time API connectivity validation with latency display
+- **Multiple Credential Sets**: Support for multiple named credential sets per environment
+- **Environment URLs**: Display UAT and Production API endpoints with visual indicators
+- **Editable Fields**: Fully editable credential names, Merchant ID, API Key, and API Secret
+- **Real-time Testing**: Test individual credential sets with visual status indicators (green/red)
+- **Context Menu**: Right-click on credential sets for quick test access
+- **Add/Remove**: Plus buttons to add new credential sets, delete functionality
+- **Export/Import**: Backup and restore credential configurations
+- **Connection Validation**: Actual API endpoint testing with response time measurement
 
 ### 📚 **Documentation Panel**
 - **OpenAPI Integration**: Load and compare Converge and Elavon L1 specifications

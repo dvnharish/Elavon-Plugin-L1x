@@ -8,10 +8,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Real code scanning with AST parsing (Phase 2)
+- Enhanced Scan Panel with real functionality (Phase 2 continuation)
 - API credential integration with Elavon L1 (Phase 3)
 - OpenAPI specification loading and processing (Phase 4)
 - AI-powered code generation with multiple backends (Phase 5)
+
+## [0.1.2] - 2024-01-16
+
+### Added - Phase 2: Code Scanner Service Implementation (Completed)
+- **Complete Code Scanner Service**
+  - Multi-language Converge API detection (JS/TS, Java, C#, Python, PHP, Ruby, VB)
+  - Dual scanning modes: Quick (regex-only) and Business-logic (regex + AST)
+  - Real-time progress tracking with cancellation support
+  - Configurable include/exclude patterns with built-in ignore list
+  - Endpoint type classification (transaction, payment, refund, auth)
+  - Confidence scoring based on pattern matching quality
+  - Framework detection for enhanced context
+
+- **File System Integration**
+  - VS Code workspace integration for file discovery
+  - Efficient file processing with proper error handling
+  - File modification tracking for incremental scanning
+  - Memory-optimized processing for large codebases
+
+- **Type System and Models**
+  - Comprehensive TypeScript interfaces for scan results
+  - Proper optional property handling with exactOptionalPropertyTypes
+  - Event-driven architecture with progress reporting
+  - Dependency injection container integration
+
+- **Testing Infrastructure**
+  - Comprehensive unit tests for core scanning functionality
+  - Mock VS Code API integration for testing
+  - Test coverage for ignore list management and progress tracking
+  - Confidence scoring and endpoint classification validation
+
+### Technical Improvements
+- **Performance**: Optimized regex patterns for multi-language detection
+- **Memory Management**: Proper cleanup and resource disposal
+- **Error Handling**: Graceful handling of file access and parsing errors
+- **Extensibility**: Plugin architecture ready for AST parser integration
+
+### Build System
+- **Clean Build Process**: Removed dist and node_modules for fresh install
+- **Version Increment**: Updated to v0.1.2 with clean package generation
+- **Production Bundle**: Optimized webpack build with source maps
+- **Code Quality**: ESLint warnings addressed for production readiness
+
+### Developer Experience
+- **Type Safety**: Full TypeScript coverage with strict configuration
+- **Testing**: Jest-based unit tests with VS Code API mocking
+- **Documentation**: Comprehensive JSDoc comments and examples
+- **Integration**: Seamless DI container registration and service resolution
+
+## [0.1.1] - 2024-01-16
+
+### Added - Phase 2: Code Scanner Service Implementation
+- **Code Scanner Service**
+  - Multi-language Converge API detection (JS/TS, Java, C#, Python, PHP, Ruby, VB)
+  - Dual scanning modes: Quick (regex-only) and Business-logic (regex + AST)
+  - Real-time progress tracking with cancellation support
+  - Configurable include/exclude patterns with built-in ignore list
+  - Endpoint type classification (transaction, payment, refund, auth)
+  - Confidence scoring based on pattern matching quality
+  - Framework detection for enhanced context
+
+- **File System Integration**
+  - VS Code workspace integration for file discovery
+  - Efficient file processing with proper error handling
+  - File modification tracking for incremental scanning
+  - Memory-optimized processing for large codebases
+
+- **Type System and Models**
+  - Comprehensive TypeScript interfaces for scan results
+  - Proper optional property handling with exactOptionalPropertyTypes
+  - Event-driven architecture with progress reporting
+  - Dependency injection container integration
+
+- **Testing Infrastructure**
+  - Comprehensive unit tests for core scanning functionality
+  - Mock VS Code API integration for testing
+  - Test coverage for ignore list management and progress tracking
+  - Confidence scoring and endpoint classification validation
+
+### Technical Improvements
+- **Performance**: Optimized regex patterns for multi-language detection
+- **Memory Management**: Proper cleanup and resource disposal
+- **Error Handling**: Graceful handling of file access and parsing errors
+- **Extensibility**: Plugin architecture ready for AST parser integration
+
+### Developer Experience
+- **Type Safety**: Full TypeScript coverage with strict configuration
+- **Testing**: Jest-based unit tests with VS Code API mocking
+- **Documentation**: Comprehensive JSDoc comments and examples
+- **Integration**: Seamless DI container registration and service resolution
 
 ## [0.1.0] - 2024-01-16
 
@@ -92,6 +182,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Phase | Key Features |
 |---------|-------------|-------|--------------|
+| 0.1.2   | 2024-01-16  | Phase 2 | Complete Code Scanner Service, clean build |
+| 0.1.1   | 2024-01-16  | Phase 2 | Code Scanner Service, multi-language detection |
 | 0.1.0   | 2024-01-16  | Phase 1 | Professional tree-based UI, mock functionality |
 | 0.0.1   | 2024-01-15  | Phase 0 | Project setup and infrastructure |
 

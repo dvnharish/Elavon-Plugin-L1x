@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { ICodeScannerService } from '../services/CodeScannerService';
 
 export interface ServiceContainer {
   get<T>(token: ServiceToken<T>): T;
@@ -46,4 +47,5 @@ export class DIContainer implements ServiceContainer {
 // Service tokens
 export const SERVICE_TOKENS = {
   EXTENSION_CONTEXT: { name: 'ExtensionContext' } as ServiceToken<vscode.ExtensionContext>,
+  CODE_SCANNER: { name: 'CodeScannerService' } as ServiceToken<ICodeScannerService>,
 } as const;

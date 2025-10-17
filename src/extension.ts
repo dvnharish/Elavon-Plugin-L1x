@@ -3,9 +3,10 @@ import { Logger } from './utils/logger';
 import { DIContainer, SERVICE_TOKENS } from './di/container';
 import { CommandRegistry } from './commands';
 import { ScanPanel } from './panels/ScanPanel';
-import { CredentialsPanel } from './panels/CredentialsPanel';
+import { CredentialsPanel } from './panels/CredentialsPanel.simple';
 import { DocsPanel } from './panels/DocsPanel';
 import { MigrationPanel } from './panels/MigrationPanel';
+import { CodeScannerService } from './services/CodeScannerService';
 
 let container: DIContainer;
 let commandRegistry: CommandRegistry;
@@ -17,6 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
         // Initialize DI container and register services
         container = new DIContainer();
         container.register(SERVICE_TOKENS.EXTENSION_CONTEXT, () => context);
+        container.register(SERVICE_TOKENS.CODE_SCANNER, () => new CodeScannerService());
         
         // Register commands
         commandRegistry = new CommandRegistry(context);

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Logger } from '../utils/logger';
+import { CredentialsWebviewPanel } from '../panels/CredentialsWebviewPanel';
 
 export class CommandRegistry {
   private disposables: vscode.Disposable[] = [];
@@ -36,8 +37,11 @@ export class CommandRegistry {
     // Credentials Panel Commands
     this.registerCommand('l1x.addCredential', () => this.handleAddCredential());
     this.registerCommand('l1x.testConnection', () => this.handleTestConnection());
+    this.registerCommand('l1x.testCredentialSet', (item?: any) => this.handleTestCredentialSet(item));
     this.registerCommand('l1x.exportCredentials', () => this.handleExportCredentials());
     this.registerCommand('l1x.importCredentials', () => this.handleImportCredentials());
+    this.registerCommand('l1x.openCredentialsEditor', () => this.handleOpenCredentialsEditor());
+    this.registerCommand('l1x.editCredentialField', (fieldItem: any) => this.handleEditCredentialField(fieldItem));
 
     // Documentation Panel Commands
     this.registerCommand('l1x.addSpec', () => this.handleAddSpec());
@@ -50,10 +54,10 @@ export class CommandRegistry {
     this.registerCommand('l1x.rollback', () => this.handleRollback());
   }
 
-  private registerCommand(command: string, callback: () => void): void {
-    const disposable = vscode.commands.registerCommand(command, () => {
+  private registerCommand(command: string, callback: (...args: any[]) => void): void {
+    const disposable = vscode.commands.registerCommand(command, (...args: any[]) => {
       Logger.buttonClicked(command.replace('l1x.', ''));
-      callback();
+      callback(...args);
     });
     this.disposables.push(disposable);
     this.context.subscriptions.push(disposable);
@@ -107,12 +111,123 @@ export class CommandRegistry {
     }
   }
 
-  private handleExportCredentials(): void {
-    vscode.window.showInformationMessage('Export Credentials clicked - functionality coming in Phase 3');
+  private async handleExportCredentials(): Promise<void> {
+    if (this.credentialsPanel) {
+      const environment = await vscode.window.showQuickPick(['uat', 'production'], {
+        placeHolder: 'Select environment to export'
+      });
+      if (environment) {
+        await this.credentialsPanel.exportCredentials(environment);
+      }
+    } else {
+      vscode.window.showInformationMessage('Export Credentials clicked - functionality coming in Phase 3');
+    }
   }
 
-  private handleImportCredentials(): void {
-    vscode.window.showInformationMessage('Import Credentials clicked - functionality coming in Phase 3');
+  private async handleImportCredentials(): Promise<void> {
+    if (this.credentialsPanel) {
+      await this.credentialsPanel.importCredentials();
+    } else {
+      vscode.window.showInformationMessage('Import Credentials clicked - functionality coming in Phase 3');
+    }
+  }
+
+  private async handleTestCredentialSet(item?: any): Promise<void> {
+    if (this.credentialsPanel) {
+      // Try multiple ways to get the credential ID
+      const credentialId = item?.credentialId || item?.id;
+      
+      if (credentialId) {
+        await this.credentialsPanel.testCredentialSet(credentialId);
+      } else {
+        vscode.window.showWarningMessage('No credential set selected');
+      }
+    } else {
+      vscode.window.showInformationMessage('Test Credential Set clicked - functionality coming in Phase 3');
+    }
+  }
+
+  private async handleOpenCredentialsEditor(): Promise<void> {
+    Logger.buttonClicked('openCredentialsEditor');
+    
+    // Get the extension URI from the context
+    const extensionUri = this.context.extensionUri;
+    CredentialsWebviewPanel.createOrShow(extensionUri);
+  }
+
+  private async handleEditCredentialField(fieldItem: any): Promise<void> {
+    Logger.buttonClicked('editCredentialField');
+    
+    if (!this.credentialsPanel) {
+      vscode.window.showErrorMessage('Credentials panel not available');
+      return;
+    }
+
+    // Debug logging
+    console.log('Field item:', fieldItem);
+
+    // Parse the field ID to extract information
+    const fieldId = fieldItem.id;
+    const fieldParts = fieldId.split('-');
+    
+    if (fieldParts.length < 3) {
+      vscode.window.showErrorMessage('Invalid field identifier');
+      return;
+    }
+
+    // The field type is always the last part
+    const fieldType = fieldParts[fieldParts.length - 1]; // e.g., "merchant", "key", "secret"
+    // The credential ID is everything except the last part
+    const credentialId = fieldParts.slice(0, -1).join('-'); // e.g., "uat-cred-1"
+    
+    // Debug logging
+    console.log('Field ID:', fieldId);
+    console.log('Field parts:', fieldParts);
+    console.log('Field type:', fieldType);
+    console.log('Credential ID:', credentialId);
+    
+    // Determine field name and current value
+    let fieldName = '';
+    let currentValue = fieldItem.value || '';
+    let isSecret = fieldItem.isSecret || false;
+    
+    switch (fieldType) {
+      case 'merchant':
+        fieldName = 'Merchant ID';
+        break;
+      case 'key':
+        fieldName = 'API Key';
+        break;
+      case 'secret':
+        fieldName = 'API Secret';
+        isSecret = true;
+        break;
+      default:
+        vscode.window.showErrorMessage('Field type not editable');
+        return;
+    }
+
+    // Show input box for editing
+    const newValue = await vscode.window.showInputBox({
+      prompt: `Edit ${fieldName}`,
+      value: currentValue,
+      password: isSecret,
+      validateInput: (value) => {
+        if (!value || value.trim().length === 0) {
+          return `${fieldName} cannot be empty`;
+        }
+        if (value.length < 3) {
+          return `${fieldName} must be at least 3 characters`;
+        }
+        return null;
+      }
+    });
+
+    if (newValue !== undefined && newValue !== currentValue) {
+      // Update the credential in the panel
+      await this.credentialsPanel.updateCredentialField(credentialId, fieldType, newValue.trim());
+      vscode.window.showInformationMessage(`${fieldName} updated successfully`);
+    }
   }
 
   // Documentation Panel Command Handlers

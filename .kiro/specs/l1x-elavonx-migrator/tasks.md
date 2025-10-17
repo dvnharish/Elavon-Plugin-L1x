@@ -107,6 +107,9 @@
 
 - [ ] 2.6 Create Migration Panel WebView
   - Implement MigrationPanel.ts with Monaco editor placeholder
+
+
+
   - Create migration.html with diff editor layout and action buttons
   - Add three buttons: Generate Preview, Apply, Rollback
   - Set up WebView messaging for button clicks showing alert notifications
@@ -155,59 +158,75 @@
 - [ ] 3.3 Enhance Scan Panel with real functionality
   - Replace mock data with actual CodeScannerService integration
   - Implement hierarchical tree display: Endpoint → File → Occurrence
+
+
   - Add real-time progress indicators with cancel capability
   - Create filtering system (language, endpoint type, confidence, text search)
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
-- [ ] 3.4 Implement file context menu integration
+- [x] 3.4 Implement file context menu integration
+
+
   - Add context menu contributions for file nodes in scan results
   - Create four context actions: Convert Preview, Migrate Style, Migrate Copilot, Analyze Document
   - Implement deep-linking to Migration and Documentation panels
   - Set up consent modal placeholder for Copilot integration
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
+
 - [ ] 3.5 Add scan result persistence and caching
   - Implement scan result serialization to workspace .l1x/scan-cache.json
   - Create cache invalidation based on file modification times
   - Add result restoration on extension activation
   - Set up workspace cleanup on extension deactivation
+
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
 - [ ] 3.6 Implement virtualized rendering for large result sets
   - Add virtual scrolling for tree views with 10k+ results
   - Optimize rendering performance with lazy loading
   - Implement debounced search and filtering
+
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
 - [ ] 3.7 Create unit tests for Phase 2 components
   - Write unit tests for CodeScannerService with mock file system
   - Test regex and AST parsing logic with sample code files
   - Create tests for scan result persistence and caching
+
   - Add tests for file context menu integration and filtering
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
 - [ ] 4. Phase 3: Credentials Panel + API Authentication
   - Implement secure credential management with VS Code SecretStorage
   - Add API connectivity testing with Elavon L1 health checks
+
   - Create encrypted export/import functionality with auto-lock mechanism
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
 - [ ] 4.1 Implement Credential Manager Service
   - Create CredentialManager.ts with SecretStorage integration
+
+
   - Add support for UAT and Production environment separation
   - Implement secure credential storage without exposing secrets in global state
   - Set up credential validation and sanitization
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
+
 - [ ] 4.2 Add API connectivity testing
   - Implement Elavon L1 authentication flow with token fetch
   - Create health endpoint connectivity testing with latency measurement
   - Add connection result handling with success/failure states
+
+
   - Set up retry logic with exponential backoff for transient failures
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
 - [ ] 4.3 Enhance Credentials Panel with real functionality
   - Replace placeholder buttons with actual credential management
+
+
   - Implement tabbed interface for UAT/Production environments
   - Add masked input fields for API Key and Secret with validation
   - Create real-time connection status display with latency indicators

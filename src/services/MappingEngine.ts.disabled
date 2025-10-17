@@ -1,0 +1,596 @@
+import * as vscode from 'vscode';
+import { Logger } from '../utils/logger';
+import { OpenApiSpec, OpenApiEndpoint, OpenApiSchema } from './OpenApiCache';
+
+export interface EndpointMapping {
+  id: string;
+  sourceEndpoint: OpenApiEndpoint;
+  targetEndpoint: OpenApiEndpoint;
+  sourceSpec: string; // spec ID
+  targetSpec: string; // spec ID
+  fieldMappings: FieldMapping[];
+  confidence: number;
+  overrides: FieldMapping[];
+  createdAt: Date;
+  updatedAt: Date;
+  notes?: string;
+}
+
+export interface FieldMapping {
+  id: string;
+  sourcePath: string;
+  targetPath: string;
+  sourceType: string;
+  targetType: string;
+  sourceDescription?: string;
+  targetDescription?: string;
+  confidence: number;
+  rule: MappingRule;
+  isManualOverride: boolean;
+  transformation?: FieldTransformation;
+  notes?: string;
+}
+
+export interface FieldTransformation {
+  type: 'direct' | 'format' | 'calculation' | 'lookup' | 'split' | 'combine';
+  description: string;
+  example?: {
+    input: any;
+    output: any;
+  };
+  code?: string; // JavaScript transformation code
+}
+
+export type MappingRule = 
+  | 'exact-match'
+  | 'name-similarity'
+  | 'type-coercion'
+  | 'semantic-similarity'
+  | 'manual-override'
+  | 'pattern-match'
+  | 'business-logic';
+
+export interface MappingStats {
+  totalMappings: number;
+  averageConfidence: number;
+  highConfidenceMappings: number; // >= 0.8
+  mediumConfidenceMappings: number; // 0.5 - 0.79
+  lowConfidenceMappings: number; // < 0.5
+  manualOverrides: number;
+  unmappedSourceFields: number;
+  unmappedTargetFields: number;
+}
+
+export class MappingEngine {
+  private static readonly MAPPINGS_KEY = 'l1x.mappings';
+  private static readonly HIGH_CONFIDENCE_THRESHOLD = 0.8;
+  private static readonly MEDIUM_CONFIDENCE_THRESHOLD = 0.5;
+
+  private mappings: Map<string, EndpointMapping> = new Map();
+
+  constructor(private context: vscode.ExtensionContext) {
+    this.loadMappings();
+  }
+
+  async generateAutoMapping(
+    sourceSpec: OpenApiSpec,
+    targetSpec: OpenApiSpec,
+    sourceEndpoint: OpenApiEndpoint,
+    targetEndpoint: OpenApiEndpoint
+  ): Promise<EndpointMapping> {
+    
+    Logger.info(`Generating auto-mapping: ${sourceEndpoint.method} ${sourceEndpoint.path} -> ${targetEndpoint.method} ${targetEndpoint.path}`);
+
+    const mappingId = this.generateMappingId(sourceEndpoint, targetEndpoint);
+    
+    // Extract all fields from source and target endpoints
+    const sourceFields = this.extractAllFields(sourceEndpoint, sourceSpec);
+    const targetFields = this.extractAllFields(targetEndpoint, targetSpec);
+
+    // Generate field mappings using various algorithms
+    const fieldMappings = await this.generateFieldMappings(sourceFields, targetFields);
+
+    // Calculate overall confidence
+    const confidence = this.calculateOverallConfidence(fieldMappings);
+
+    const mapping: EndpointMapping = {
+      id: mappingId,
+      sourceEndpoint,
+      targetEndpoint,
+      sourceSpec: sourceSpec.id,
+      targetSpec: targetSpec.id,
+      fieldMappings,
+      confidence,
+      overrides: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    this.mappings.set(mappingId, mapping);
+    await this.saveMappings();
+
+    Logger.info(`Generated mapping with ${fieldMappings.length} field mappings, confidence: ${(confidence * 100).toFixed(1)}%`);
+    return mapping;
+  }
+
+  async applyManualOverride(mappingId: string, fieldMapping: FieldMapping): Promise<void> {
+    const mapping = this.mappings.get(mappingId);
+    if (!mapping) {
+      throw new Error('Mapping not found');
+    }
+
+    // Remove any existing override for the same source path
+    mapping.overrides = mapping.overrides.filter(override => override.sourcePath !== fieldMapping.sourcePath);
+    
+    // Add the new override
+    fieldMapping.isManualOverride = true;
+    fieldMapping.rule = 'manual-override';
+    mapping.overrides.push(fieldMapping);
+    mapping.updatedAt = new Date();
+
+    // Recalculate confidence
+    const allMappings = [...mapping.fieldMappings, ...mapping.overrides];
+    mapping.confidence = this.calculateOverallConfidence(allMappings);
+
+    await this.saveMappings();
+    Logger.info(`Applied manual override for ${fieldMapping.sourcePath} -> ${fieldMapping.targetPath}`);
+  }
+
+  async removeManualOverride(mappingId: string, sourcePath: string): Promise<void> {
+    const mapping = this.mappings.get(mappingId);
+    if (!mapping) {
+      throw new Error('Mapping not found');
+    }
+
+    const originalLength = mapping.overrides.length;
+    mapping.overrides = mapping.overrides.filter(override => override.sourcePath !== sourcePath);
+    
+    if (mapping.overrides.length < originalLength) {
+      mapping.updatedAt = new Date();
+      
+      // Recalculate confidence
+      const allMappings = [...mapping.fieldMappings, ...mapping.overrides];
+      mapping.confidence = this.calculateOverallConfidence(allMappings);
+      
+      await this.saveMappings();
+      Logger.info(`Removed manual override for ${sourcePath}`);
+    }
+  }
+
+  getMapping(mappingId: string): EndpointMapping | undefined {
+    return this.mappings.get(mappingId);
+  }
+
+  getAllMappings(): EndpointMapping[] {
+    return Array.from(this.mappings.values());
+  }
+
+  getMappingsForSpec(specId: string): EndpointMapping[] {
+    return Array.from(this.mappings.values()).filter(
+      mapping => mapping.sourceSpec === specId || mapping.targetSpec === specId
+    );
+  }
+
+  async deleteMapping(mappingId: string): Promise<void> {
+    if (this.mappings.delete(mappingId)) {
+      await this.saveMappings();
+      Logger.info(`Deleted mapping: ${mappingId}`);
+    }
+  }
+
+  async exportMappings(format: 'json' | 'markdown' = 'json'): Promise<string> {
+    const mappings = Array.from(this.mappings.values());
+    
+    if (format === 'json') {
+      return JSON.stringify(mappings, null, 2);
+    } else {
+      return this.generateMarkdownReport(mappings);
+    }
+  }
+
+  getMappingStats(): MappingStats {
+    const mappings = Array.from(this.mappings.values());
+    const allFieldMappings = mappings.flatMap(m => [...m.fieldMappings, ...m.overrides]);
+
+    const highConfidence = allFieldMappings.filter(fm => fm.confidence >= MappingEngine.HIGH_CONFIDENCE_THRESHOLD).length;
+    const mediumConfidence = allFieldMappings.filter(fm => 
+      fm.confidence >= MappingEngine.MEDIUM_CONFIDENCE_THRESHOLD && 
+      fm.confidence < MappingEngine.HIGH_CONFIDENCE_THRESHOLD
+    ).length;
+    const lowConfidence = allFieldMappings.filter(fm => fm.confidence < MappingEngine.MEDIUM_CONFIDENCE_THRESHOLD).length;
+
+    const totalConfidence = allFieldMappings.reduce((sum, fm) => sum + fm.confidence, 0);
+    const averageConfidence = allFieldMappings.length > 0 ? totalConfidence / allFieldMappings.length : 0;
+
+    return {
+      totalMappings: allFieldMappings.length,
+      averageConfidence,
+      highConfidenceMappings: highConfidence,
+      mediumConfidenceMappings: mediumConfidence,
+      lowConfidenceMappings: lowConfidence,
+      manualOverrides: allFieldMappings.filter(fm => fm.isManualOverride).length,
+      unmappedSourceFields: 0, // TODO: Calculate based on source fields without mappings
+      unmappedTargetFields: 0   // TODO: Calculate based on target fields without mappings
+    };
+  }
+
+  private async generateFieldMappings(
+    sourceFields: ExtractedField[],
+    targetFields: ExtractedField[]
+  ): Promise<FieldMapping[]> {
+    
+    const mappings: FieldMapping[] = [];
+    const usedTargetFields = new Set<string>();
+
+    for (const sourceField of sourceFields) {
+      const bestMatch = this.findBestFieldMatch(sourceField, targetFields, usedTargetFields);
+      
+      if (bestMatch) {
+        const fieldMapping: FieldMapping = {
+          id: `${sourceField.path}_to_${bestMatch.field.path}`,
+          sourcePath: sourceField.path,
+          targetPath: bestMatch.field.path,
+          sourceType: sourceField.type,
+          targetType: bestMatch.field.type,
+          sourceDescription: sourceField.description,
+          targetDescription: bestMatch.field.description,
+          confidence: bestMatch.confidence,
+          rule: bestMatch.rule,
+          isManualOverride: false
+        };
+
+        // Add transformation if types don't match exactly
+        if (sourceField.type !== bestMatch.field.type) {
+          fieldMapping.transformation = this.generateTransformation(sourceField, bestMatch.field);
+        }
+
+        mappings.push(fieldMapping);
+        usedTargetFields.add(bestMatch.field.path);
+      }
+    }
+
+    return mappings;
+  }
+
+  private findBestFieldMatch(
+    sourceField: ExtractedField,
+    targetFields: ExtractedField[],
+    usedTargetFields: Set<string>
+  ): { field: ExtractedField; confidence: number; rule: MappingRule } | null {
+    
+    let bestMatch: { field: ExtractedField; confidence: number; rule: MappingRule } | null = null;
+
+    for (const targetField of targetFields) {
+      if (usedTargetFields.has(targetField.path)) {
+        continue; // Skip already used fields
+      }
+
+      const matchResult = this.calculateFieldMatchConfidence(sourceField, targetField);
+      
+      if (!bestMatch || matchResult.confidence > bestMatch.confidence) {
+        bestMatch = {
+          field: targetField,
+          confidence: matchResult.confidence,
+          rule: matchResult.rule
+        };
+      }
+    }
+
+    // Only return matches above minimum threshold
+    return bestMatch && bestMatch.confidence >= 0.3 ? bestMatch : null;
+  }
+
+  private calculateFieldMatchConfidence(
+    sourceField: ExtractedField,
+    targetField: ExtractedField
+  ): { confidence: number; rule: MappingRule } {
+    
+    // Exact name match
+    if (sourceField.name.toLowerCase() === targetField.name.toLowerCase()) {
+      return { confidence: 1.0, rule: 'exact-match' };
+    }
+
+    // Calculate name similarity using Levenshtein distance
+    const nameSimilarity = this.calculateStringSimilarity(sourceField.name, targetField.name);
+    
+    // Type compatibility bonus
+    const typeCompatibility = this.calculateTypeCompatibility(sourceField.type, targetField.type);
+    
+    // Description similarity (if available)
+    const descriptionSimilarity = sourceField.description && targetField.description
+      ? this.calculateStringSimilarity(sourceField.description, targetField.description)
+      : 0;
+
+    // Pattern matching for common field transformations
+    const patternMatch = this.calculatePatternMatch(sourceField, targetField);
+
+    // Weighted combination
+    let confidence = 
+      nameSimilarity * 0.5 +
+      typeCompatibility * 0.3 +
+      descriptionSimilarity * 0.1 +
+      patternMatch * 0.1;
+
+    // Determine rule based on primary matching factor
+    let rule: MappingRule;
+    if (nameSimilarity > 0.8) {
+      rule = 'name-similarity';
+    } else if (typeCompatibility > 0.8 && nameSimilarity > 0.5) {
+      rule = 'type-coercion';
+    } else if (patternMatch > 0.7) {
+      rule = 'pattern-match';
+    } else if (descriptionSimilarity > 0.7) {
+      rule = 'semantic-similarity';
+    } else {
+      rule = 'business-logic';
+    }
+
+    return { confidence: Math.min(confidence, 1.0), rule };
+  }
+
+  private calculateStringSimilarity(str1: string, str2: string): number {
+    const s1 = str1.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const s2 = str2.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    if (s1 === s2) return 1.0;
+    if (s1.length === 0 || s2.length === 0) return 0;
+
+    // Levenshtein distance
+    const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+    
+    for (let i = 0; i <= s1.length; i++) matrix[0][i] = i;
+    for (let j = 0; j <= s2.length; j++) matrix[j][0] = j;
+    
+    for (let j = 1; j <= s2.length; j++) {
+      for (let i = 1; i <= s1.length; i++) {
+        const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1,     // deletion
+          matrix[j - 1][i] + 1,     // insertion
+          matrix[j - 1][i - 1] + indicator // substitution
+        );
+      }
+    }
+    
+    const distance = matrix[s2.length][s1.length];
+    const maxLength = Math.max(s1.length, s2.length);
+    return 1 - (distance / maxLength);
+  }
+
+  private calculateTypeCompatibility(sourceType: string, targetType: string): number {
+    if (sourceType === targetType) return 1.0;
+    
+    // Define type compatibility matrix
+    const compatibilityMap: { [key: string]: { [key: string]: number } } = {
+      'string': { 'string': 1.0, 'integer': 0.3, 'number': 0.3, 'boolean': 0.1 },
+      'integer': { 'integer': 1.0, 'number': 0.9, 'string': 0.5, 'boolean': 0.1 },
+      'number': { 'number': 1.0, 'integer': 0.9, 'string': 0.5, 'boolean': 0.1 },
+      'boolean': { 'boolean': 1.0, 'string': 0.3, 'integer': 0.2, 'number': 0.2 },
+      'array': { 'array': 1.0, 'object': 0.3, 'string': 0.1 },
+      'object': { 'object': 1.0, 'array': 0.3, 'string': 0.1 }
+    };
+
+    return compatibilityMap[sourceType]?.[targetType] || 0.1;
+  }
+
+  private calculatePatternMatch(sourceField: ExtractedField, targetField: ExtractedField): number {
+    // Common field name patterns and their L1 equivalents
+    const patterns = [
+      { source: /ssl_merchant_id/i, target: /merchant_id/i, score: 0.95 },
+      { source: /ssl_amount/i, target: /amount/i, score: 0.9 },
+      { source: /ssl_card_number/i, target: /card.*number/i, score: 0.9 },
+      { source: /ssl_exp_date/i, target: /exp.*date|expiry/i, score: 0.85 },
+      { source: /ssl_cvv/i, target: /cvv|cvc/i, score: 0.9 },
+      { source: /ssl_first_name/i, target: /first.*name/i, score: 0.85 },
+      { source: /ssl_last_name/i, target: /last.*name/i, score: 0.85 },
+      { source: /ssl_address/i, target: /address/i, score: 0.8 },
+      { source: /ssl_city/i, target: /city/i, score: 0.9 },
+      { source: /ssl_state/i, target: /state/i, score: 0.9 },
+      { source: /ssl_zip/i, target: /zip|postal/i, score: 0.85 }
+    ];
+
+    for (const pattern of patterns) {
+      if (pattern.source.test(sourceField.name) && pattern.target.test(targetField.name)) {
+        return pattern.score;
+      }
+    }
+
+    return 0;
+  }
+
+  private generateTransformation(sourceField: ExtractedField, targetField: ExtractedField): FieldTransformation {
+    // Generate appropriate transformation based on field types and patterns
+    if (sourceField.type === 'string' && targetField.type === 'integer') {
+      return {
+        type: 'format',
+        description: 'Convert string to integer',
+        example: { input: '123', output: 123 },
+        code: 'parseInt(value, 10)'
+      };
+    }
+
+    if (sourceField.type === 'string' && targetField.type === 'number') {
+      return {
+        type: 'format',
+        description: 'Convert string to number',
+        example: { input: '123.45', output: 123.45 },
+        code: 'parseFloat(value)'
+      };
+    }
+
+    // Amount transformation (dollars to cents)
+    if (sourceField.name.toLowerCase().includes('amount') && 
+        sourceField.type === 'number' && targetField.type === 'integer') {
+      return {
+        type: 'calculation',
+        description: 'Convert dollars to cents',
+        example: { input: 12.34, output: 1234 },
+        code: 'Math.round(value * 100)'
+      };
+    }
+
+    // Default direct mapping
+    return {
+      type: 'direct',
+      description: 'Direct field mapping',
+      example: { input: sourceField.example, output: sourceField.example }
+    };
+  }
+
+  private extractAllFields(endpoint: OpenApiEndpoint, spec: OpenApiSpec): ExtractedField[] {
+    const fields: ExtractedField[] = [];
+
+    // Extract from parameters
+    endpoint.parameters.forEach(param => {
+      fields.push({
+        path: `parameters.${param.name}`,
+        name: param.name,
+        type: param.schema.type,
+        description: param.description,
+        required: param.required,
+        example: param.schema.example
+      });
+    });
+
+    // Extract from request body
+    if (endpoint.requestBody) {
+      const jsonContent = endpoint.requestBody.content['application/json'];
+      if (jsonContent?.schema) {
+        const bodyFields = this.extractFieldsFromSchema(jsonContent.schema, 'requestBody', spec);
+        fields.push(...bodyFields);
+      }
+    }
+
+    // Extract from responses (typically 200 response)
+    const successResponse = endpoint.responses.find(r => r.statusCode === '200' || r.statusCode === '201');
+    if (successResponse?.content) {
+      const jsonContent = successResponse.content['application/json'];
+      if (jsonContent?.schema) {
+        const responseFields = this.extractFieldsFromSchema(jsonContent.schema, 'response', spec);
+        fields.push(...responseFields);
+      }
+    }
+
+    return fields;
+  }
+
+  private extractFieldsFromSchema(schema: OpenApiSchema, basePath: string, spec: OpenApiSpec): ExtractedField[] {
+    const fields: ExtractedField[] = [];
+
+    if (schema.properties) {
+      Object.entries(schema.properties).forEach(([propName, propSchema]) => {
+        const fieldPath = `${basePath}.${propName}`;
+        fields.push({
+          path: fieldPath,
+          name: propName,
+          type: propSchema.type,
+          description: propSchema.description,
+          required: schema.required?.includes(propName) || false,
+          example: propSchema.example
+        });
+
+        // Recursively extract nested fields
+        if (propSchema.properties) {
+          const nestedFields = this.extractFieldsFromSchema(propSchema, fieldPath, spec);
+          fields.push(...nestedFields);
+        }
+      });
+    }
+
+    return fields;
+  }
+
+  private calculateOverallConfidence(fieldMappings: FieldMapping[]): number {
+    if (fieldMappings.length === 0) return 0;
+    
+    const totalConfidence = fieldMappings.reduce((sum, mapping) => sum + mapping.confidence, 0);
+    return totalConfidence / fieldMappings.length;
+  }
+
+  private generateMappingId(sourceEndpoint: OpenApiEndpoint, targetEndpoint: OpenApiEndpoint): string {
+    const sourceId = `${sourceEndpoint.method}_${sourceEndpoint.path}`.replace(/[^a-zA-Z0-9]/g, '_');
+    const targetId = `${targetEndpoint.method}_${targetEndpoint.path}`.replace(/[^a-zA-Z0-9]/g, '_');
+    return `${sourceId}_to_${targetId}_${Date.now()}`;
+  }
+
+  private generateMarkdownReport(mappings: EndpointMapping[]): string {
+    const stats = this.getMappingStats();
+    
+    let markdown = '# API Mapping Report\n\n';
+    markdown += `Generated: ${new Date().toLocaleString()}\n\n`;
+    
+    markdown += '## Summary\n\n';
+    markdown += `- Total Mappings: ${stats.totalMappings}\n`;
+    markdown += `- Average Confidence: ${(stats.averageConfidence * 100).toFixed(1)}%\n`;
+    markdown += `- High Confidence (≥80%): ${stats.highConfidenceMappings}\n`;
+    markdown += `- Medium Confidence (50-79%): ${stats.mediumConfidenceMappings}\n`;
+    markdown += `- Low Confidence (<50%): ${stats.lowConfidenceMappings}\n`;
+    markdown += `- Manual Overrides: ${stats.manualOverrides}\n\n`;
+
+    markdown += '## Endpoint Mappings\n\n';
+    
+    mappings.forEach(mapping => {
+      markdown += `### ${mapping.sourceEndpoint.method} ${mapping.sourceEndpoint.path} → ${mapping.targetEndpoint.method} ${mapping.targetEndpoint.path}\n\n`;
+      markdown += `**Confidence:** ${(mapping.confidence * 100).toFixed(1)}%\n\n`;
+      
+      if (mapping.fieldMappings.length > 0) {
+        markdown += '#### Field Mappings\n\n';
+        markdown += '| Source Field | Target Field | Confidence | Rule |\n';
+        markdown += '|--------------|--------------|------------|------|\n';
+        
+        mapping.fieldMappings.forEach(fm => {
+          markdown += `| ${fm.sourcePath} | ${fm.targetPath} | ${(fm.confidence * 100).toFixed(1)}% | ${fm.rule} |\n`;
+        });
+        markdown += '\n';
+      }
+
+      if (mapping.overrides.length > 0) {
+        markdown += '#### Manual Overrides\n\n';
+        markdown += '| Source Field | Target Field | Notes |\n';
+        markdown += '|--------------|--------------|-------|\n';
+        
+        mapping.overrides.forEach(override => {
+          markdown += `| ${override.sourcePath} | ${override.targetPath} | ${override.notes || 'Manual override'} |\n`;
+        });
+        markdown += '\n';
+      }
+    });
+
+    return markdown;
+  }
+
+  private async loadMappings(): Promise<void> {
+    try {
+      const mappingData = this.context.globalState.get<[string, EndpointMapping][]>(MappingEngine.MAPPINGS_KEY);
+      if (mappingData) {
+        this.mappings = new Map(mappingData);
+        Logger.info(`Loaded ${this.mappings.size} endpoint mappings`);
+      }
+    } catch (error) {
+      Logger.error('Failed to load mappings', error as Error);
+      this.mappings.clear();
+    }
+  }
+
+  private async saveMappings(): Promise<void> {
+    try {
+      await this.context.globalState.update(MappingEngine.MAPPINGS_KEY, Array.from(this.mappings.entries()));
+      Logger.info(`Saved ${this.mappings.size} endpoint mappings`);
+    } catch (error) {
+      Logger.error('Failed to save mappings', error as Error);
+    }
+  }
+
+  dispose(): void {
+    // Cleanup if needed
+  }
+}
+
+interface ExtractedField {
+  path: string;
+  name: string;
+  type: string;
+  description?: string;
+  required: boolean;
+  example?: any;
+}

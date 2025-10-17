@@ -4,7 +4,7 @@ import { createMockContext } from './test/mocks';
 
 // Mock the panel classes
 jest.mock('./panels/ScanPanel');
-jest.mock('./panels/CredentialsPanel');
+jest.mock('./panels/CredentialsPanel.simple');
 jest.mock('./panels/DocsPanel');
 jest.mock('./panels/MigrationPanel');
 

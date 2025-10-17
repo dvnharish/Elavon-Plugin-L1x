@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 import { Logger } from '../utils/logger';
+// import { OpenApiCache, OpenApiSpec, OpenApiEndpoint } from '../services/OpenApiCache';
+// import { MappingEngine, EndpointMapping, MappingStats } from '../services/MappingEngine';
 
 export interface DocTreeItem {
   id: string;
   label: string;
-  type: 'spec' | 'endpoint' | 'field' | 'mapping' | 'category';
+  type: 'spec' | 'endpoint' | 'field' | 'mapping' | 'category' | 'stats' | 'status';
   specType?: 'converge' | 'l1';
   children?: DocTreeItem[];
   description?: string;
@@ -12,12 +14,17 @@ export interface DocTreeItem {
   required?: boolean;
   mappedTo?: string;
   confidence?: number;
+  specId?: string;
+  endpointId?: string;
+  mappingId?: string;
 }
 
 export class DocsPanel implements vscode.TreeDataProvider<DocTreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<DocTreeItem | undefined | null | void> = new vscode.EventEmitter<DocTreeItem | undefined | null | void>();
   readonly onDidChangeTreeData: vscode.Event<DocTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
+  // private openApiCache?: OpenApiCache;
+  // private mappingEngine?: MappingEngine;
   private mockData: DocTreeItem[] = [
     {
       id: 'converge-spec',
