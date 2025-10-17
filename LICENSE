@@ -1,0 +1,60 @@
+MIT License
+
+Copyright (c) 2024 Elavon, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Additional Terms
+
+### Trademark Notice
+"Elavon", "L1X", and "ElavonX" are trademarks of Elavon, Inc. and are used with permission.
+
+### Third-Party Licenses
+This software includes components from the following third-party libraries:
+
+- **VS Code Extension API**: Licensed under MIT License
+- **TypeScript**: Licensed under Apache License 2.0
+- **Webpack**: Licensed under MIT License
+- **Jest**: Licensed under MIT License
+- **ESLint**: Licensed under MIT License
+
+### Data Privacy
+This extension may process payment-related code and API credentials. Users are responsible for:
+- Ensuring compliance with applicable data protection regulations
+- Securing API credentials and sensitive information
+- Following their organization's security policies
+
+### Support and Warranty Disclaimer
+This software is provided as-is without warranty. Elavon provides no guarantee of:
+- Compatibility with all code bases
+- Accuracy of migration transformations
+- Availability of external services (GitHub Copilot, etc.)
+
+Users should thoroughly test all generated code before deploying to production environments.
+
+### Commercial Use
+This software may be used for commercial purposes under the terms of this license.
+Organizations using this software in production environments are encouraged to:
+- Implement proper testing procedures
+- Maintain backup copies of original code
+- Follow security best practices for API credential management
+
+For enterprise support or custom licensing arrangements, please contact Elavon, Inc.
