@@ -3,7 +3,7 @@ import * as path from 'path';
 import { EventEmitter } from 'events';
 
 export interface ScanOptions {
-  mode: 'business-logic' | 'quick';
+  mode: 'regex' | 'ast' | 'dto';
   languages: string[];
   excludePatterns: string[];
   includePatterns: string[];
@@ -17,10 +17,16 @@ export interface ScanResult {
   snippet: string;
   matchedText: string;
   confidence: number;
-  endpointType: 'transaction' | 'payment' | 'refund' | 'auth' | 'unknown';
+  endpointType: 'transaction' | 'payment' | 'refund' | 'auth' | 'dto' | 'endpoint' | 'class' | 'unknown';
   language: string;
   framework?: string;
   createdAt: Date;
+  scanType: 'regex' | 'ast' | 'dto';
+  className?: string;
+  methodName?: string;
+  endpointUrl?: string;
+  dtoName?: string;
+  businessLogicType?: 'api-call' | 'endpoint-definition' | 'data-model' | 'service-class';
 }
 
 export interface ScanProgress {
@@ -63,67 +69,189 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     '**/*.bundle.js'
   ];
 
-  // Converge API patterns for different languages
+  // Enhanced Converge API patterns for different scan types and languages
   private readonly convergePatterns = {
     // JavaScript/TypeScript patterns
-    javascript: [
-      // API endpoint patterns
-      /(?:converge|cvg)\.(?:transaction|payment|refund|auth)\.(?:create|process|submit|execute)/gi,
-      /(?:converge|cvg)\.api\.(?:post|get|put|delete)\s*\(/gi,
-      /(?:converge|cvg)\.endpoint\s*[=:]\s*['"`]([^'"`]+)['"`]/gi,
-      // Configuration patterns
-      /(?:converge|cvg)\.config\s*[=:]/gi,
-      /(?:converge|cvg)\.merchantId\s*[=:]/gi,
-      /(?:converge|cvg)\.apiKey\s*[=:]/gi,
-      // Method calls
-      /\.(?:processTransaction|processPayment|processRefund|processAuth)\s*\(/gi,
-      // Import/require patterns
-      /(?:import|require)\s*.*(?:converge|cvg)/gi
-    ],
+    javascript: {
+      regex: [
+        // Endpoint URL patterns
+        /['"`](https?:\/\/[^'"`]*(?:converge|elavon)[^'"`]*)['"`]/gi,
+        /(?:endpoint|url|baseUrl)\s*[=:]\s*['"`]([^'"`]*(?:converge|elavon)[^'"`]*)['"`]/gi,
+        // API method patterns
+        /(?:converge|cvg)\.(?:transaction|payment|refund|auth)\.(?:create|process|submit|execute)/gi,
+        /(?:converge|cvg)\.api\.(?:post|get|put|delete)\s*\(/gi,
+        // Configuration patterns
+        /(?:converge|cvg)\.(?:config|merchantId|apiKey|apiSecret)\s*[=:]/gi,
+        // Import/require patterns
+        /(?:import|require)\s*.*(?:converge|cvg)/gi
+      ],
+      ast: [
+        // Service class definitions with Converge
+        /class\s+(\w*(?:Converge|CVG|Payment|Transaction|Service|Client|Handler)\w*)/gi,
+        // Method definitions with business logic
+        /(?:async\s+)?(?:function|method)\s+(\w*(?:process|handle|execute|call)(?:Payment|Transaction|Refund|API|Converge)\w*)/gi,
+        // API call patterns in methods
+        /(?:await\s+)?(?:fetch|axios|http|this\.client)\.(?:post|get|put|delete)\s*\([^)]*(?:converge|payment|transaction|api)/gi,
+        // Endpoint configuration patterns
+        /(?:const|let|var)\s+\w*(?:endpoint|url|api)\w*\s*=\s*['"`][^'"`]*(?:converge|elavon)/gi,
+        // Service injection patterns
+        /(?:constructor|inject)\s*\([^)]*(?:Converge|Payment|Transaction)(?:Service|Client)/gi
+      ],
+      dto: [
+        // DTO/Model class patterns
+        /(?:interface|class|type)\s+(\w*(?:DTO|Dto|Model|Request|Response|Data)\w*)/gi,
+        // Payment/Transaction data structures
+        /(?:interface|class|type)\s+(\w*(?:Payment|Transaction|Refund|Auth)\w*(?:DTO|Dto|Model|Request|Response|Data)\w*)/gi,
+        // Property patterns in DTOs
+        /(?:merchantId|apiKey|transactionId|paymentId|amount|currency)\s*[?:]?\s*(?:string|number)/gi
+      ]
+    },
     // Java patterns
-    java: [
-      /(?:Converge|CVG)(?:Client|Service|API|Transaction|Payment)/g,
-      /(?:converge|cvg)\.(?:transaction|payment|refund|auth)\.(?:create|process|submit|execute)/gi,
-      /(?:@Converge|@CVG)(?:Endpoint|Service|Client)/g,
-      /new\s+(?:Converge|CVG)(?:Client|Service|API)/g,
-      /\.(?:processTransaction|processPayment|processRefund|processAuth)\s*\(/gi
-    ],
+    java: {
+      regex: [
+        // Endpoint URL patterns
+        /"(https?:\/\/[^"]*(?:converge|elavon)[^"]*)"/gi,
+        // API method patterns
+        /(?:Converge|CVG)\.(?:transaction|payment|refund|auth)\.(?:create|process|submit|execute)/gi,
+        // Configuration patterns
+        /(?:@Value|@ConfigurationProperties).*(?:converge|cvg)/gi
+      ],
+      ast: [
+        // Class definitions
+        /(?:public\s+)?class\s+(\w*(?:Converge|CVG|Payment|Transaction|Service|Controller)\w*)/gi,
+        // Method definitions
+        /(?:public|private|protected)\s+\w+\s+(\w*(?:process|handle|execute)(?:Payment|Transaction|Refund)\w*)\s*\(/gi,
+        // Spring/Framework annotations with classes
+        /(?:@RestController|@Service|@Component|@Repository|@Controller)\s*(?:\([^)]*\))?\s*(?:public\s+)?class\s+(\w+)/gi,
+        // Endpoint mapping annotations
+        /(?:@PostMapping|@GetMapping|@PutMapping|@DeleteMapping|@RequestMapping)\s*\([^)]*(?:payment|transaction|converge)/gi
+      ],
+      dto: [
+        // DTO class patterns
+        /(?:public\s+)?class\s+(\w*(?:DTO|Dto|Model|Request|Response|Data)\w*)/gi,
+        // Entity annotations
+        /(?:@Entity|@Table|@Document)\s*(?:\([^)]*\))?\s*(?:public\s+)?class\s+(\w+)/gi,
+        // Field patterns
+        /(?:private|public)\s+(?:String|Long|Integer|BigDecimal)\s+(?:merchantId|apiKey|transactionId|paymentId|amount)/gi
+      ]
+    },
     // C# patterns
-    csharp: [
-      /(?:Converge|CVG)(?:Client|Service|API|Transaction|Payment)/g,
-      /(?:converge|cvg)\.(?:Transaction|Payment|Refund|Auth)\.(?:Create|Process|Submit|Execute)/gi,
-      /\[(?:Converge|CVG)(?:Endpoint|Service|Client)\]/g,
-      /new\s+(?:Converge|CVG)(?:Client|Service|API)/g,
-      /\.(?:ProcessTransaction|ProcessPayment|ProcessRefund|ProcessAuth)\s*\(/gi
-    ],
+    csharp: {
+      regex: [
+        // Endpoint URL patterns
+        /"(https?:\/\/[^"]*(?:converge|elavon)[^"]*)"/gi,
+        // API method patterns
+        /(?:Converge|CVG)\.(?:Transaction|Payment|Refund|Auth)\.(?:Create|Process|Submit|Execute)/gi,
+        // Configuration patterns
+        /(?:ConfigurationManager|IConfiguration).*(?:converge|cvg)/gi
+      ],
+      ast: [
+        // Class definitions
+        /(?:public\s+)?class\s+(\w*(?:Converge|CVG|Payment|Transaction|Service|Controller)\w*)/gi,
+        // Method definitions
+        /(?:public|private|protected)\s+(?:async\s+)?(?:Task<?[\w<>]*>?|void|\w+)\s+(\w*(?:Process|Handle|Execute)(?:Payment|Transaction|Refund)\w*)\s*\(/gi,
+        // Controller/Service attributes
+        /\[(?:ApiController|Route|HttpPost|HttpGet)\][\s\S]*?(?:public\s+)?class\s+(\w+)/gi
+      ],
+      dto: [
+        // DTO class patterns
+        /(?:public\s+)?class\s+(\w*(?:DTO|Dto|Model|Request|Response|Data)\w*)/gi,
+        // Property patterns
+        /public\s+(?:string|long|int|decimal)\s+(?:MerchantId|ApiKey|TransactionId|PaymentId|Amount)/gi
+      ]
+    },
     // Python patterns
-    python: [
-      /(?:converge|cvg)\.(?:transaction|payment|refund|auth)\.(?:create|process|submit|execute)/gi,
-      /(?:from|import)\s+(?:converge|cvg)/gi,
-      /(?:Converge|CVG)(?:Client|Service|API|Transaction|Payment)/g,
-      /\.(?:process_transaction|process_payment|process_refund|process_auth)\s*\(/gi
-    ],
+    python: {
+      regex: [
+        // Endpoint URL patterns
+        /['"`](https?:\/\/[^'"`]*(?:converge|elavon)[^'"`]*)['"`]/gi,
+        // API method patterns
+        /(?:converge|cvg)\.(?:transaction|payment|refund|auth)\.(?:create|process|submit|execute)/gi,
+        // Import patterns
+        /(?:from|import)\s+(?:converge|cvg)/gi
+      ],
+      ast: [
+        // Class definitions
+        /class\s+(\w*(?:Converge|CVG|Payment|Transaction|Service)\w*)/gi,
+        // Method definitions
+        /def\s+(\w*(?:process|handle|execute)_(?:payment|transaction|refund)\w*)\s*\(/gi,
+        // FastAPI/Flask decorators
+        /@(?:app\.(?:post|get|put|delete)|route)\s*\([^)]*(?:payment|transaction)/gi
+      ],
+      dto: [
+        // Pydantic models
+        /class\s+(\w*(?:Model|Schema|DTO|Dto|Request|Response|Data)\w*)\s*\(.*(?:BaseModel|Schema)/gi,
+        // Dataclass patterns
+        /@dataclass[\s\S]*?class\s+(\w*(?:Payment|Transaction|Refund)\w*)/gi
+      ]
+    },
     // PHP patterns
-    php: [
-      /(?:Converge|CVG)(?:Client|Service|API|Transaction|Payment)/g,
-      /(?:converge|cvg)->(?:transaction|payment|refund|auth)->(?:create|process|submit|execute)/gi,
-      /new\s+(?:Converge|CVG)(?:Client|Service|API)/g,
-      /->(?:processTransaction|processPayment|processRefund|processAuth)\s*\(/gi
-    ],
+    php: {
+      regex: [
+        // Endpoint URL patterns
+        /['"`](https?:\/\/[^'"`]*(?:converge|elavon)[^'"`]*)['"`]/gi,
+        // API method patterns
+        /(?:converge|cvg)->(?:transaction|payment|refund|auth)->(?:create|process|submit|execute)/gi,
+        // Class instantiation
+        /new\s+(?:Converge|CVG)(?:Client|Service|API)/gi
+      ],
+      ast: [
+        // Class definitions
+        /class\s+(\w*(?:Converge|CVG|Payment|Transaction|Service|Controller)\w*)/gi,
+        // Method definitions
+        /(?:public|private|protected)\s+function\s+(\w*(?:process|handle|execute)(?:Payment|Transaction|Refund)\w*)\s*\(/gi
+      ],
+      dto: [
+        // DTO class patterns
+        /class\s+(\w*(?:DTO|Dto|Model|Request|Response|Data)\w*)/gi,
+        // Property patterns
+        /(?:public|private|protected)\s+\$(?:merchantId|apiKey|transactionId|paymentId|amount)/gi
+      ]
+    },
     // Ruby patterns
-    ruby: [
-      /(?:Converge|CVG)(?:Client|Service|API|Transaction|Payment)/g,
-      /(?:converge|cvg)\.(?:transaction|payment|refund|auth)\.(?:create|process|submit|execute)/gi,
-      /(?:Converge|CVG)(?:Client|Service|API)\.new/g,
-      /\.(?:process_transaction|process_payment|process_refund|process_auth)\s*\(/gi
-    ],
+    ruby: {
+      regex: [
+        // Endpoint URL patterns
+        /['"`](https?:\/\/[^'"`]*(?:converge|elavon)[^'"`]*)['"`]/gi,
+        // API method patterns
+        /(?:converge|cvg)\.(?:transaction|payment|refund|auth)\.(?:create|process|submit|execute)/gi,
+        // Class instantiation
+        /(?:Converge|CVG)(?:Client|Service|API)\.new/gi
+      ],
+      ast: [
+        // Class definitions
+        /class\s+(\w*(?:Converge|CVG|Payment|Transaction|Service|Controller)\w*)/gi,
+        // Method definitions
+        /def\s+(\w*(?:process|handle|execute)_(?:payment|transaction|refund)\w*)/gi
+      ],
+      dto: [
+        // Model class patterns
+        /class\s+(\w*(?:Model|DTO|Dto|Request|Response|Data)\w*)/gi,
+        // ActiveRecord models
+        /class\s+(\w+)\s*<\s*(?:ActiveRecord::Base|ApplicationRecord)/gi
+      ]
+    },
     // VB.NET patterns
-    vb: [
-      /(?:Converge|CVG)(?:Client|Service|API|Transaction|Payment)/g,
-      /(?:converge|cvg)\.(?:Transaction|Payment|Refund|Auth)\.(?:Create|Process|Submit|Execute)/gi,
-      /New\s+(?:Converge|CVG)(?:Client|Service|API)/gi,
-      /\.(?:ProcessTransaction|ProcessPayment|ProcessRefund|ProcessAuth)\s*\(/gi
-    ]
+    vb: {
+      regex: [
+        // Endpoint URL patterns
+        /"(https?:\/\/[^"]*(?:converge|elavon)[^"]*)"/gi,
+        // API method patterns
+        /(?:Converge|CVG)\.(?:Transaction|Payment|Refund|Auth)\.(?:Create|Process|Submit|Execute)/gi
+      ],
+      ast: [
+        // Class definitions
+        /(?:Public\s+)?Class\s+(\w*(?:Converge|CVG|Payment|Transaction|Service)\w*)/gi,
+        // Method definitions
+        /(?:Public|Private|Protected)\s+(?:Function|Sub)\s+(\w*(?:Process|Handle|Execute)(?:Payment|Transaction|Refund)\w*)\s*\(/gi
+      ],
+      dto: [
+        // DTO class patterns
+        /(?:Public\s+)?Class\s+(\w*(?:DTO|Dto|Model|Request|Response|Data)\w*)/gi,
+        // Property patterns
+        /(?:Public|Private)\s+Property\s+(?:MerchantId|ApiKey|TransactionId|PaymentId|Amount)/gi
+      ]
+    }
   };
 
   // File extensions for each language
@@ -297,22 +425,32 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
       }
 
       const results: ScanResult[] = [];
-      const patterns = (this.convergePatterns as any)[language];
+      const languagePatterns = (this.convergePatterns as any)[language];
       
-      if (!patterns) {
+      if (!languagePatterns) {
         return [];
       }
 
-      // Scan using regex patterns
-      for (const pattern of patterns) {
-        const matches = this.findMatches(content, pattern, filePath, language);
-        results.push(...matches);
+      // Get patterns based on scan mode
+      let patterns: RegExp[] = [];
+      switch (options.mode) {
+        case 'regex':
+          patterns = languagePatterns.regex || [];
+          break;
+        case 'ast':
+          patterns = languagePatterns.ast || [];
+          break;
+        case 'dto':
+          patterns = languagePatterns.dto || [];
+          break;
+        default:
+          patterns = languagePatterns.regex || [];
       }
 
-      // If business-logic mode, enhance with AST parsing
-      if (options.mode === 'business-logic') {
-        const astResults = await this.enhanceWithAST(content, filePath, language, results);
-        return astResults;
+      // Scan using selected patterns
+      for (const pattern of patterns) {
+        const matches = this.findMatches(content, pattern, filePath, language, options.mode);
+        results.push(...matches);
       }
 
       return results;
@@ -322,7 +460,7 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     }
   }
 
-  private findMatches(content: string, pattern: RegExp, filePath: string, language: string): ScanResult[] {
+  private findMatches(content: string, pattern: RegExp, filePath: string, language: string, scanType: 'regex' | 'ast' | 'dto'): ScanResult[] {
     const results: ScanResult[] = [];
     const lines = content.split('\n');
     
@@ -345,6 +483,9 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
         const endLine = Math.min(lines.length - 1, lineIndex + 1);
         const snippet = lines.slice(startLine, endLine + 1).join('\n');
 
+        // Extract additional information based on scan type
+        const additionalInfo = this.extractAdditionalInfo(matchedText, line, scanType);
+
         results.push({
           id: `${filePath}:${lineIndex + 1}:${match.index}:${Date.now()}`,
           filePath,
@@ -355,7 +496,9 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
           confidence,
           endpointType,
           language,
-          createdAt: new Date()
+          createdAt: new Date(),
+          scanType,
+          ...additionalInfo
         });
         
         // Prevent infinite loop for global regex
@@ -368,25 +511,7 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     return results;
   }
 
-  private async enhanceWithAST(content: string, filePath: string, language: string, regexResults: ScanResult[]): Promise<ScanResult[]> {
-    // For now, return regex results with enhanced confidence
-    // In a full implementation, this would use language-specific AST parsers
-    // like @babel/parser for JS/TS, tree-sitter, or language servers
-    
-    return regexResults.map(result => {
-      const framework = this.detectFramework(content, language);
-      const enhanced: ScanResult = {
-        ...result,
-        confidence: Math.min(result.confidence + 0.1, 1.0), // Slight confidence boost for AST mode
-      };
-      
-      if (framework) {
-        enhanced.framework = framework;
-      }
-      
-      return enhanced;
-    });
-  }
+
 
   private detectLanguage(filePath: string): string | null {
     const ext = path.extname(filePath).toLowerCase();
@@ -400,7 +525,7 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     return null;
   }
 
-  private classifyEndpointType(matchedText: string): 'transaction' | 'payment' | 'refund' | 'auth' | 'unknown' {
+  private classifyEndpointType(matchedText: string): 'transaction' | 'payment' | 'refund' | 'auth' | 'dto' | 'endpoint' | 'class' | 'unknown' {
     const text = matchedText.toLowerCase();
     
     if (text.includes('transaction')) {
@@ -415,8 +540,63 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     if (text.includes('auth')) {
       return 'auth';
     }
+    if (text.includes('dto') || text.includes('model') || text.includes('request') || text.includes('response')) {
+      return 'dto';
+    }
+    if (text.includes('http') || text.includes('endpoint') || text.includes('url')) {
+      return 'endpoint';
+    }
+    if (text.includes('class') || text.includes('service') || text.includes('controller')) {
+      return 'class';
+    }
     
     return 'unknown';
+  }
+
+  private extractAdditionalInfo(matchedText: string, line: string, scanType: 'regex' | 'ast' | 'dto'): Partial<ScanResult> {
+    const info: Partial<ScanResult> = {};
+
+    switch (scanType) {
+      case 'regex':
+        // Extract endpoint URLs
+        const urlMatch = matchedText.match(/https?:\/\/[^\s"'`]+/);
+        if (urlMatch) {
+          info.endpointUrl = urlMatch[0];
+        }
+        break;
+
+      case 'ast':
+        // Extract class names
+        const classMatch = matchedText.match(/class\s+(\w+)/i);
+        if (classMatch && classMatch[1]) {
+          info.className = classMatch[1];
+          info.businessLogicType = 'service-class';
+        }
+
+        // Extract method names
+        const methodMatch = matchedText.match(/(?:function|def|public|private)\s+(\w+)/i);
+        if (methodMatch && methodMatch[1]) {
+          info.methodName = methodMatch[1];
+          info.businessLogicType = 'api-call';
+        }
+
+        // Detect endpoint definitions
+        if (line.includes('@') && (line.includes('Post') || line.includes('Get') || line.includes('Put') || line.includes('Delete'))) {
+          info.businessLogicType = 'endpoint-definition';
+        }
+        break;
+
+      case 'dto':
+        // Extract DTO names
+        const dtoMatch = matchedText.match(/(?:class|interface|type)\s+(\w+)/i);
+        if (dtoMatch && dtoMatch[1]) {
+          info.dtoName = dtoMatch[1];
+          info.businessLogicType = 'data-model';
+        }
+        break;
+    }
+
+    return info;
   }
 
   private calculateConfidence(matchedText: string, line: string, language: string): number {

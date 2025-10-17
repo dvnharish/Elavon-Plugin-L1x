@@ -2,7 +2,7 @@
   "name": "l1x-elavonx-migrator",
   "displayName": "L1X ElavonX Migrator",
   "description": "VS Code extension to migrate legacy Converge API integrations to modern Elavon L1 APIs",
-  "version": "0.3.2",
+  "version": "0.6.1",
   "publisher": "elavon",
   "repository": {
     "type": "git",
@@ -85,6 +85,16 @@
         "icon": "$(list-unordered)"
       },
       {
+        "command": "l1x.configureScan",
+        "title": "Configure Scan",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "l1x.clearResults",
+        "title": "Clear Results",
+        "icon": "$(clear-all)"
+      },
+      {
         "command": "l1x.addCredential",
         "title": "Add Credential",
         "icon": "$(add)"
@@ -147,6 +157,46 @@
         "command": "l1x.rollback",
         "title": "Rollback",
         "icon": "$(discard)"
+      },
+      {
+        "command": "l1x.generateMigration",
+        "title": "Generate Migration",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "l1x.addToIgnoreList",
+        "title": "Add to Ignore List",
+        "icon": "$(exclude)"
+      },
+      {
+        "command": "l1x.detectFileStandard",
+        "title": "✅ Detect File Standard (Auto-Check)",
+        "icon": "$(check)"
+      },
+      {
+        "command": "l1x.migrateToElavon",
+        "title": "🔄 Migrate to Elavon",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "l1x.askGitHubCopilot",
+        "title": "💬 Ask GitHub Copilot for Migration",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "l1x.compareOpenAPISpecs",
+        "title": "📂 Compare Converge and Elavon Specs",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "l1x.validateElavonCompliance",
+        "title": "🧪 Validate Elavon Compliance",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "l1x.batchDetectStandards",
+        "title": "Detect Standards for All Files",
+        "icon": "$(checklist)"
       }
     ],
     "menus": {
@@ -170,6 +220,16 @@
           "command": "l1x.viewSummary",
           "when": "view == l1x.scanPanel",
           "group": "navigation@4"
+        },
+        {
+          "command": "l1x.configureScan",
+          "when": "view == l1x.scanPanel",
+          "group": "navigation@5"
+        },
+        {
+          "command": "l1x.clearResults",
+          "when": "view == l1x.scanPanel",
+          "group": "navigation@6"
         },
         {
           "command": "l1x.addCredential",
@@ -229,6 +289,66 @@
       ],
       "view/item/context": [
         {
+          "command": "l1x.scanProject",
+          "when": "view == l1x.scanPanel && viewItem == scanSummary",
+          "group": "scan@1"
+        },
+        {
+          "command": "l1x.configureScan",
+          "when": "view == l1x.scanPanel && viewItem == scanSummary",
+          "group": "scan@2"
+        },
+        {
+          "command": "l1x.clearResults",
+          "when": "view == l1x.scanPanel && viewItem == scanSummary",
+          "group": "scan@3"
+        },
+        {
+          "command": "vscode.open",
+          "when": "view == l1x.scanPanel && viewItem == scanFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "l1x.generateMigration",
+          "when": "view == l1x.scanPanel && (viewItem == scanFile || viewItem == scanOccurrence)",
+          "group": "migration@1"
+        },
+        {
+          "command": "l1x.addToIgnoreList",
+          "when": "view == l1x.scanPanel && (viewItem == scanFile || viewItem == scanOccurrence)",
+          "group": "migration@2"
+        },
+        {
+          "command": "l1x.detectFileStandard",
+          "when": "view == l1x.scanPanel && viewItem == scanFile",
+          "group": "standards@1"
+        },
+        {
+          "command": "l1x.migrateToElavon",
+          "when": "view == l1x.scanPanel && viewItem == scanFile",
+          "group": "standards@2"
+        },
+        {
+          "command": "l1x.askGitHubCopilot",
+          "when": "view == l1x.scanPanel && viewItem == scanFile",
+          "group": "standards@3"
+        },
+        {
+          "command": "l1x.compareOpenAPISpecs",
+          "when": "view == l1x.scanPanel && viewItem == scanFile",
+          "group": "standards@4"
+        },
+        {
+          "command": "l1x.validateElavonCompliance",
+          "when": "view == l1x.scanPanel && viewItem == scanFile",
+          "group": "standards@5"
+        },
+        {
+          "command": "l1x.batchDetectStandards",
+          "when": "view == l1x.scanPanel && viewItem == scanSummary",
+          "group": "standards@1"
+        },
+        {
           "command": "l1x.addCredential",
           "when": "view == l1x.credentialsPanel && viewItem == credentialEnvironment",
           "group": "inline@1"
@@ -244,6 +364,46 @@
           "group": "inline@1"
         }
       ]
+    },
+    "configuration": {
+      "title": "L1X Copilot Integration",
+      "properties": {
+        "l1x.copilot.convergeSpecPath": {
+          "type": "string",
+          "default": "openapi/Converge Open API.json",
+          "description": "Path to Converge OpenAPI specification file"
+        },
+        "l1x.copilot.elavonSpecPath": {
+          "type": "string",
+          "default": "openapi/Elavon API Gateway Open API.json",
+          "description": "Path to Elavon L1 OpenAPI specification file"
+        },
+        "l1x.copilot.offlineMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Disable external API calls to GitHub Copilot (for testing)"
+        },
+        "l1x.copilot.enableTelemetry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable usage telemetry for Copilot integration"
+        },
+        "l1x.copilot.redactSecrets": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically redact sensitive data before sending to Copilot"
+        },
+        "l1x.copilot.maxPromptLength": {
+          "type": "number",
+          "default": 8000,
+          "description": "Maximum length for prompts sent to GitHub Copilot"
+        },
+        "l1x.copilot.timeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "description": "Timeout in milliseconds for GitHub Copilot API calls"
+        }
+      }
     }
   },
   "scripts": {

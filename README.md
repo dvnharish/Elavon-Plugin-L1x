@@ -19,11 +19,13 @@ The L1X ElavonX Migrator is a comprehensive VS Code extension that streamlines t
 
 ## ✨ Features
 
-### 🔍 **Project Scan Panel**
+### 🔍 **Project Scan Panel** ✅ Phase 1 Complete
 - **Multi-language Support**: Discover Converge API integrations across JS/TS, Java, C#, Python, PHP, Ruby, and VB
-- **Hierarchical Tree View**: Organized by Endpoint → File → Occurrence
+- **Hierarchical Tree View**: Organized by Endpoint → File → Occurrence with confidence indicators
 - **Real-time Progress**: Live progress indicators with cancellation support
-- **Context Menu Actions**: Right-click to initiate migrations directly from scan results
+- **Scan Configuration**: Choose between Quick Scan (regex) and Business Logic Scan (AST)
+- **Confidence Scoring**: Visual indicators showing match confidence levels (high/medium/low)
+- **Interactive Results**: Click to navigate to code locations, enhanced tooltips with context
 
 ### 🔑 **Credentials Panel**
 - **Multiple Credential Sets**: Support for multiple named credential sets per environment
@@ -54,7 +56,7 @@ The extension follows a structured phase-based approach:
 
 - **Phase 0**: Project Setup & Infrastructure ✅
 - **Phase 1**: Extension Skeleton + Interactive UI ✅
-- **Phase 2**: Scan Panel + Code Discovery (In Development)
+- **Phase 2**: Scan Panel + Code Discovery ✅ (Phase 1 Complete)
 - **Phase 3**: Credentials Panel + API Authentication
 - **Phase 4**: Documentation Panel + OpenAPI Mapping
 - **Phase 5**: Migration Panel + AI Code Generation
@@ -236,7 +238,8 @@ Elavon is a leading payment processor providing innovative payment solutions for
 ## 🎯 Roadmap
 
 - [x] **Phase 1**: Professional UI with tree-based panels
-- [ ] **Phase 2**: Real code scanning with AST parsing
+- [x] **Phase 2.1**: Real code scanning with regex patterns and confidence scoring
+- [ ] **Phase 2.2**: Enhanced AST parsing and framework detection
 - [ ] **Phase 3**: Complete credential management with API integration
 - [ ] **Phase 4**: OpenAPI specification loading and field mapping
 - [ ] **Phase 5**: AI-powered code generation and transformation

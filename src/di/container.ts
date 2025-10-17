@@ -48,4 +48,10 @@ export class DIContainer implements ServiceContainer {
 export const SERVICE_TOKENS = {
   EXTENSION_CONTEXT: { name: 'ExtensionContext' } as ServiceToken<vscode.ExtensionContext>,
   CODE_SCANNER: { name: 'CodeScannerService' } as ServiceToken<ICodeScannerService>,
+  COPILOT_SERVICE: { name: 'CopilotService' } as ServiceToken<import('../services/CopilotService').ICopilotService>,
+  CONTEXT_BUILDER: { name: 'FileContextBuilder' } as ServiceToken<import('../services/FileContextBuilder').FileContextBuilder>,
+  REDACTION_SERVICE: { name: 'RedactionService' } as ServiceToken<import('../services/RedactionService').RedactionService>,
+  OPENAPI_SERVICE: { name: 'OpenApiService' } as ServiceToken<import('../services/OpenApiService').OpenApiService>,
+  PROMPT_BUILDER: { name: 'PromptBuilder' } as ServiceToken<import('../services/PromptBuilder').PromptBuilder>,
+  FILE_STANDARD_ANALYZER: { name: 'FileStandardAnalyzer' } as ServiceToken<import('../services/FileStandardAnalyzer').FileStandardAnalyzer>,
 } as const;

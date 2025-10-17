@@ -33,6 +33,8 @@ export class CommandRegistry {
     this.registerCommand('l1x.reScan', () => this.handleReScan());
     this.registerCommand('l1x.refresh', () => this.handleRefresh());
     this.registerCommand('l1x.viewSummary', () => this.handleViewSummary());
+    this.registerCommand('l1x.configureScan', () => this.handleConfigureScan());
+    this.registerCommand('l1x.clearResults', () => this.handleClearResults());
 
     // Credentials Panel Commands
     this.registerCommand('l1x.addCredential', () => this.handleAddCredential());
@@ -52,6 +54,18 @@ export class CommandRegistry {
     this.registerCommand('l1x.generatePreview', () => this.handleGeneratePreview());
     this.registerCommand('l1x.apply', () => this.handleApply());
     this.registerCommand('l1x.rollback', () => this.handleRollback());
+
+    // Context Menu Commands
+    this.registerCommand('l1x.generateMigration', (item?: any) => this.handleGenerateMigration(item));
+    this.registerCommand('l1x.addToIgnoreList', (item?: any) => this.handleAddToIgnoreList(item));
+    
+    // Enhanced Context Menu Commands for File Standard Detection
+    this.registerCommand('l1x.detectFileStandard', (item?: any) => this.handleDetectFileStandard(item));
+    this.registerCommand('l1x.migrateToElavon', (item?: any) => this.handleMigrateToElavon(item));
+    this.registerCommand('l1x.askGitHubCopilot', (item?: any) => this.handleAskGitHubCopilot(item));
+    this.registerCommand('l1x.compareOpenAPISpecs', (item?: any) => this.handleCompareOpenAPISpecs(item));
+    this.registerCommand('l1x.validateElavonCompliance', (item?: any) => this.handleValidateElavonCompliance(item));
+    this.registerCommand('l1x.batchDetectStandards', () => this.handleBatchDetectStandards());
   }
 
   private registerCommand(command: string, callback: (...args: any[]) => void): void {
@@ -64,23 +78,52 @@ export class CommandRegistry {
   }
 
   // Scan Panel Command Handlers
-  private handleScanProject(): void {
-    vscode.window.showInformationMessage('Scan Project clicked - Mock data displayed');
-    this.scanPanel?.refresh();
+  private async handleScanProject(): Promise<void> {
+    if (this.scanPanel) {
+      await this.scanPanel.scanProject();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
   }
 
-  private handleReScan(): void {
-    vscode.window.showInformationMessage('Re-Scan clicked - Mock data refreshed');
-    this.scanPanel?.refresh();
+  private async handleReScan(): Promise<void> {
+    if (this.scanPanel) {
+      await this.scanPanel.reScan();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
   }
 
   private handleRefresh(): void {
-    vscode.window.showInformationMessage('Refresh clicked - Tree view refreshed');
-    this.scanPanel?.refresh();
+    if (this.scanPanel) {
+      this.scanPanel.refresh();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
   }
 
   private handleViewSummary(): void {
-    vscode.window.showInformationMessage('View Summary clicked - Found 2 endpoints, 3 files, 4 occurrences');
+    if (this.scanPanel) {
+      this.scanPanel.viewSummary();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleConfigureScan(): Promise<void> {
+    if (this.scanPanel) {
+      await this.scanPanel.configureScan();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private handleClearResults(): void {
+    if (this.scanPanel) {
+      this.scanPanel.clearResults();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
   }
 
   // Credentials Panel Command Handlers
@@ -163,8 +206,7 @@ export class CommandRegistry {
       return;
     }
 
-    // Debug logging
-    console.log('Field item:', fieldItem);
+
 
     // Parse the field ID to extract information
     const fieldId = fieldItem.id;
@@ -179,12 +221,7 @@ export class CommandRegistry {
     const fieldType = fieldParts[fieldParts.length - 1]; // e.g., "merchant", "key", "secret"
     // The credential ID is everything except the last part
     const credentialId = fieldParts.slice(0, -1).join('-'); // e.g., "uat-cred-1"
-    
-    // Debug logging
-    console.log('Field ID:', fieldId);
-    console.log('Field parts:', fieldParts);
-    console.log('Field type:', fieldType);
-    console.log('Credential ID:', credentialId);
+
     
     // Determine field name and current value
     let fieldName = '';
@@ -279,6 +316,147 @@ export class CommandRegistry {
       await this.migrationPanel.rollbackMigration('applied-1');
     } else {
       vscode.window.showInformationMessage('Rollback clicked - functionality coming in Phase 5');
+    }
+  }
+
+  // Context Menu Command Handlers
+  private async handleGenerateMigration(item?: any): Promise<void> {
+    Logger.buttonClicked('generateMigration');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No item selected for migration');
+      return;
+    }
+
+    const itemType = item.contextValue || 'unknown';
+    const itemLabel = item.label || 'Unknown item';
+    
+    // Show confirmation dialog
+    const choice = await vscode.window.showInformationMessage(
+      `Generate migration for ${itemLabel}?`,
+      { modal: true },
+      'Generate',
+      'Cancel'
+    );
+
+    if (choice === 'Generate') {
+      vscode.window.showInformationMessage(
+        `Migration generation for ${itemType} will be available in Phase 5`
+      );
+    }
+  }
+
+  private async handleAddToIgnoreList(item?: any): Promise<void> {
+    Logger.buttonClicked('addToIgnoreList');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No item selected to ignore');
+      return;
+    }
+
+    const itemLabel = item.label || 'Unknown item';
+    
+    // Show confirmation dialog
+    const choice = await vscode.window.showWarningMessage(
+      `Add ${itemLabel} to ignore list? This will exclude it from future scans.`,
+      { modal: true },
+      'Add to Ignore List',
+      'Cancel'
+    );
+
+    if (choice === 'Add to Ignore List') {
+      if (this.scanPanel && this.scanPanel.addToIgnoreList) {
+        await this.scanPanel.addToIgnoreList(item);
+        vscode.window.showInformationMessage(`${itemLabel} added to ignore list`);
+      } else {
+        vscode.window.showInformationMessage('Ignore list functionality will be enhanced in Phase 2.2');
+      }
+    }
+  }
+
+  // Enhanced Context Menu Command Handlers
+  private async handleDetectFileStandard(item?: any): Promise<void> {
+    Logger.buttonClicked('detectFileStandard');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No file selected for standard detection');
+      return;
+    }
+
+    if (this.scanPanel && this.scanPanel.detectFileStandard) {
+      await this.scanPanel.detectFileStandard(item);
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleMigrateToElavon(item?: any): Promise<void> {
+    Logger.buttonClicked('migrateToElavon');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No file selected for migration');
+      return;
+    }
+
+    if (this.scanPanel && this.scanPanel.migrateToElavon) {
+      await this.scanPanel.migrateToElavon(item);
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleAskGitHubCopilot(item?: any): Promise<void> {
+    Logger.buttonClicked('askGitHubCopilot');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No file selected for Copilot assistance');
+      return;
+    }
+
+    if (this.scanPanel && this.scanPanel.askGitHubCopilot) {
+      await this.scanPanel.askGitHubCopilot(item);
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleCompareOpenAPISpecs(item?: any): Promise<void> {
+    Logger.buttonClicked('compareOpenAPISpecs');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No file selected for spec comparison');
+      return;
+    }
+
+    if (this.scanPanel && this.scanPanel.compareOpenAPISpecs) {
+      await this.scanPanel.compareOpenAPISpecs(item);
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleValidateElavonCompliance(item?: any): Promise<void> {
+    Logger.buttonClicked('validateElavonCompliance');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No file selected for validation');
+      return;
+    }
+
+    if (this.scanPanel && this.scanPanel.validateElavonCompliance) {
+      await this.scanPanel.validateElavonCompliance(item);
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleBatchDetectStandards(): Promise<void> {
+    Logger.buttonClicked('batchDetectStandards');
+    
+    if (this.scanPanel && this.scanPanel.batchDetectStandards) {
+      await this.scanPanel.batchDetectStandards();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
     }
   }
 

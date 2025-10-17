@@ -48,8 +48,8 @@ describe('CommandRegistry', () => {
       expect(registerCommandSpy).toHaveBeenCalledWith('l1x.apply', expect.any(Function));
       expect(registerCommandSpy).toHaveBeenCalledWith('l1x.rollback', expect.any(Function));
       
-      // Should register 17 commands total (added testCredentialSet, openCredentialsEditor, and editCredentialField)
-      expect(registerCommandSpy).toHaveBeenCalledTimes(17);
+      // Should register 27 commands total (added 6 new context menu commands for file standard detection)
+      expect(registerCommandSpy).toHaveBeenCalledTimes(27);
     });
   });
 
@@ -58,7 +58,13 @@ describe('CommandRegistry', () => {
       commandRegistry.registerAllCommands();
     });
 
-    it('should show information message when scan project command is executed', () => {
+    it('should call scan panel when scan project command is executed', async () => {
+      const mockScanPanel = {
+        scanProject: jest.fn().mockResolvedValue(undefined)
+      };
+      
+      commandRegistry.setScanPanel(mockScanPanel);
+      
       // Get the registered callback for scanProject
       const scanProjectCallback = registerCommandSpy.mock.calls.find(
         call => call[0] === 'l1x.scanProject'
@@ -67,11 +73,9 @@ describe('CommandRegistry', () => {
       expect(scanProjectCallback).toBeDefined();
       
       // Execute the callback
-      scanProjectCallback();
+      await scanProjectCallback();
       
-      expect(showInformationMessageSpy).toHaveBeenCalledWith(
-        'Scan Project clicked - Mock data displayed'
-      );
+      expect(mockScanPanel.scanProject).toHaveBeenCalled();
     });
 
     it('should show information message when add credential command is executed', () => {
@@ -97,8 +101,8 @@ describe('CommandRegistry', () => {
       commandRegistry.registerAllCommands();
       commandRegistry.dispose();
       
-      // Should dispose all 17 commands
-      expect(mockDisposable.dispose).toHaveBeenCalledTimes(17);
+      // Should dispose all 27 commands
+      expect(mockDisposable.dispose).toHaveBeenCalledTimes(27);
     });
   });
 });

@@ -33,14 +33,13 @@ describe('ScanPanel', () => {
   });
 
   describe('getChildren', () => {
-    it('should return root items when no element provided', async () => {
+    it('should return empty state when no scan results', async () => {
       const children = await scanPanel.getChildren();
       
-      expect(children).toHaveLength(2);
-      expect(children[0]?.label).toBe('Payment Transactions');
-      expect(children[0]?.type).toBe('endpoint');
-      expect(children[1]?.label).toBe('Authentication');
-      expect(children[1]?.type).toBe('endpoint');
+      expect(children).toHaveLength(1);
+      expect(children[0]?.id).toBe('empty-state');
+      expect(children[0]?.label).toBe('No scan results. Click the Scan Project button (🔍) to start scanning.');
+      expect(children[0]?.type).toBe('summary');
     });
 
     it('should return children of provided element', async () => {
@@ -118,8 +117,8 @@ describe('ScanPanel', () => {
       
       expect(treeItem.label).toBe('Line 45: test code');
       expect(treeItem.collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
-      expect(treeItem.iconPath).toEqual(new vscode.ThemeIcon('search'));
-      expect(treeItem.tooltip).toBe('const result = test();');
+      expect(treeItem.iconPath).toEqual(new vscode.ThemeIcon('question'));
+      expect(treeItem.tooltip).toBe('Confidence: 0% | Type: unknown | const result = test();');
     });
   });
 

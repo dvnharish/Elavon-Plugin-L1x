@@ -8,10 +8,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Enhanced Scan Panel with real functionality (Phase 2 continuation)
 - API credential integration with Elavon L1 (Phase 3)
 - OpenAPI specification loading and processing (Phase 4)
 - AI-powered code generation with multiple backends (Phase 5)
+
+## [0.4.1] - 2024-01-17
+
+### Improved - Enhanced User Experience & Business Logic Scanning
+- **Removed Default Mock Data**
+  - ✅ Clean empty state on startup - no more default scan results
+  - ✅ Clear instruction message: "No scan results. Click the Scan Project button (🔍) to start scanning."
+  
+- **Added Breadcrumb Navigation**
+  - 📍 **Breadcrumb Display**: Shows scan type, language count, and results summary
+  - 📍 **Example**: "📍 Regex Scan • 7 languages • 12 matches in 5 files"
+  - 📍 **Location**: Appears at the top of scan results for easy reference
+  
+- **Enhanced Scan Button Behavior**
+  - 🔍 **Default Scan**: Clicking scan button now defaults to Regex Scan with all languages
+  - 🔍 **Smart Defaults**: Automatically scans JavaScript, Java, C#, Python, PHP, Ruby, VB.NET
+  - 🔍 **No Configuration Required**: Works out-of-the-box for quick discovery
+  
+- **Improved Scan Type Names**
+  - 🔍 **Regex Scan** - Find Converge endpoints, URLs, and DTOs (Default)
+  - 🏗️ **Scan Converge Business Logic** - Analyze where API calls happen, find service classes and endpoint configurations
+  - 📋 **DTO Scan** - Specifically find Data Transfer Objects and models
+  
+- **Enhanced Business Logic Detection**
+  - 🏗️ **Better Service Class Detection**: Enhanced patterns for service classes and controllers
+  - 🏗️ **Endpoint Configuration Discovery**: Finds where endpoints are configured and called
+  - 🏗️ **Framework Annotations**: Better detection of Spring, ASP.NET, and other framework annotations
+  - 🏗️ **API Call Patterns**: Improved detection of actual API calls in business logic
+
+### Technical Improvements
+- Enhanced AST patterns for better business logic analysis
+- Improved breadcrumb information display
+- Better empty state handling
+- Updated test coverage for new empty state behavior
+
+## [0.4.0] - 2024-01-17
+
+### Added - Enhanced Scan Panel with Three Scan Types
+- **Fixed Navigation Issue**
+  - ✅ Fixed file path resolution for proper navigation to code locations
+  - ✅ Click on files and occurrences now properly opens files and navigates to exact lines
+  
+- **Three Specialized Scan Types**
+  - 🔍 **Regex Scan**: Find Converge endpoints, URLs, and DTOs using regex patterns
+  - 🏗️ **AST Scan**: Analyze business logic, API calls, and service classes using AST-like parsing
+  - 📋 **DTO Scan**: Specifically find Data Transfer Objects and models
+  
+- **Enhanced Tree Structure**
+  - Organized results by scan type: API Endpoints, Service Classes, DTOs, Transactions
+  - Enhanced tooltips with confidence percentage, scan type, and additional context
+  - Better labeling with class names, method names, DTO names, and endpoint URLs
+  
+- **Improved Scanning Capabilities**
+  - Enhanced pattern matching for 7 programming languages
+  - Better confidence scoring based on scan type and context
+  - Additional metadata extraction (class names, method names, DTOs, URLs)
+  - Business logic type classification (api-call, endpoint-definition, data-model, service-class)
+  
+- **Enhanced Test Files**
+  - Updated JavaScript and TypeScript examples with comprehensive patterns
+  - Added Java example with Spring annotations and DTOs
+  - All test files demonstrate the three scan types
+  
+### Technical Improvements
+- Updated ScanOptions interface to support new scan modes
+- Enhanced ScanResult interface with additional metadata fields
+- Improved pattern organization with nested structure for different scan types
+- Better error handling and TypeScript strict mode compliance
+- All 39 tests passing with updated scan modes
 
 ## [0.1.2] - 2024-01-16
 

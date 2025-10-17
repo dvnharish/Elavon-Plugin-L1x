@@ -11,6 +11,9 @@ import { CodeScannerService } from './services/CodeScannerService';
 let container: DIContainer;
 let commandRegistry: CommandRegistry;
 
+// Export container for use in other modules
+export { container };
+
 export function activate(context: vscode.ExtensionContext) {
     Logger.activate();
     
@@ -19,6 +22,18 @@ export function activate(context: vscode.ExtensionContext) {
         container = new DIContainer();
         container.register(SERVICE_TOKENS.EXTENSION_CONTEXT, () => context);
         container.register(SERVICE_TOKENS.CODE_SCANNER, () => new CodeScannerService());
+        
+        // Register GitHub Copilot integration services
+        container.register(SERVICE_TOKENS.FILE_STANDARD_ANALYZER, () => new (require('./services/FileStandardAnalyzer').FileStandardAnalyzer)());
+        container.register(SERVICE_TOKENS.OPENAPI_SERVICE, () => new (require('./services/OpenApiService').OpenApiService)());
+        container.register(SERVICE_TOKENS.REDACTION_SERVICE, () => new (require('./services/RedactionService').RedactionService)());
+        container.register(SERVICE_TOKENS.PROMPT_BUILDER, () => new (require('./services/PromptBuilder').PromptBuilder)());
+        container.register(SERVICE_TOKENS.CONTEXT_BUILDER, (container) => {
+            const fileStandardAnalyzer = container.get(SERVICE_TOKENS.FILE_STANDARD_ANALYZER);
+            const openApiService = container.get(SERVICE_TOKENS.OPENAPI_SERVICE);
+            return new (require('./services/FileContextBuilder').FileContextBuilder)(fileStandardAnalyzer, openApiService);
+        });
+        container.register(SERVICE_TOKENS.COPILOT_SERVICE, () => new (require('./services/CopilotService').CopilotService)());
         
         // Register commands
         commandRegistry = new CommandRegistry(context);
