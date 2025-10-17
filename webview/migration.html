@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+    <title>L1X Migration</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-editor-background);
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .header {
+            margin-bottom: 20px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 8px 16px;
+            border: 1px solid var(--vscode-button-border);
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: var(--vscode-font-size);
+        }
+        
+        button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+        
+        button.primary {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
+        
+        button.danger {
+            background-color: var(--vscode-testing-iconFailed);
+            color: var(--vscode-editor-background);
+        }
+        
+        .diff-editor {
+            height: 400px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 3px;
+            margin-bottom: 20px;
+            display: flex;
+        }
+        
+        .diff-pane {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            font-family: var(--vscode-editor-font-family);
+            font-size: var(--vscode-editor-font-size);
+        }
+        
+        .diff-pane:first-child {
+            border-right: 1px solid var(--vscode-panel-border);
+            background-color: var(--vscode-diffEditor-removedTextBackground);
+        }
+        
+        .diff-pane:last-child {
+            background-color: var(--vscode-diffEditor-insertedTextBackground);
+        }
+        
+        .diff-pane h4 {
+            margin-top: 0;
+            color: var(--vscode-focusBorder);
+        }
+        
+        .code-block {
+            background-color: var(--vscode-textCodeBlock-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 3px;
+            padding: 10px;
+            font-family: var(--vscode-editor-font-family);
+            font-size: var(--vscode-editor-font-size);
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        
+        .placeholder {
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
+            text-align: center;
+            padding: 50px 20px;
+        }
+        
+        .explanation {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: var(--vscode-textBlockQuote-background);
+            border-left: 3px solid var(--vscode-focusBorder);
+            border-radius: 3px;
+        }
+        
+        .explanation h4 {
+            margin-top: 0;
+            color: var(--vscode-focusBorder);
+        }
+        
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 3px;
+            display: none;
+        }
+        
+        .status.success {
+            background-color: var(--vscode-testing-iconPassed);
+            color: var(--vscode-editor-background);
+        }
+        
+        .status.error {
+            background-color: var(--vscode-testing-iconFailed);
+            color: var(--vscode-editor-background);
+        }
+        
+        .status.warning {
+            background-color: var(--vscode-testing-iconQueued);
+            color: var(--vscode-editor-background);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h3>Code Migration</h3>
+        <div class="button-group">
+            <button onclick="generatePreview()" class="primary">Generate Preview</button>
+            <button onclick="apply()" class="primary">Apply</button>
+            <button onclick="rollback()" class="danger">Rollback</button>
+        </div>
+    </div>
+    
+    <div class="diff-editor">
+        <div class="diff-pane">
+            <h4>Original Code</h4>
+            <div id="original-code">
+                <div class="placeholder">
+                    No code selected for migration.<br>
+                    Use the Scan Panel to select code for migration.
+                </div>
+            </div>
+        </div>
+        
+        <div class="diff-pane">
+            <h4>Generated Code</h4>
+            <div id="generated-code">
+                <div class="placeholder">
+                    Click "Generate Preview" to see the migrated code.<br>
+                    AI-assisted transformation coming in Phase 5.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="explanation" id="explanation" style="display: none;">
+        <h4>AI Transformation Explanation</h4>
+        <div id="explanation-content"></div>
+    </div>
+    
+    <div id="status" class="status"></div>
+
+    <script>
+        // Get VS Code API
+        const vscode = acquireVsCodeApi();
+        
+        function generatePreview() {
+            vscode.postMessage({
+                command: 'generatePreview'
+            });
+        }
+        
+        function apply() {
+            vscode.postMessage({
+                command: 'apply'
+            });
+        }
+        
+        function rollback() {
+            vscode.postMessage({
+                command: 'rollback'
+            });
+        }
+        
+        // Listen for messages from the extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            
+            switch (message.command) {
+                case 'showDiff':
+                    showDiff(message.original, message.generated);
+                    break;
+                case 'showExplanation':
+                    showExplanation(message.explanation);
+                    break;
+                case 'showStatus':
+                    showStatus(message.type, message.text);
+                    break;
+                case 'showMockDiff':
+                    showMockDiff();
+                    break;
+            }
+        });
+        
+        function showDiff(original, generated) {
+            document.getElementById('original-code').innerHTML = 
+                '<div class="code-block">' + escapeHtml(original) + '</div>';
+            document.getElementById('generated-code').innerHTML = 
+                '<div class="code-block">' + escapeHtml(generated) + '</div>';
+        }
+        
+        function showExplanation(explanation) {
+            document.getElementById('explanation-content').textContent = explanation;
+            document.getElementById('explanation').style.display = 'block';
+        }
+        
+        function showStatus(type, text) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = text;
+            statusElement.className = 'status ' + type;
+            statusElement.style.display = 'block';
+            
+            // Hide status after 5 seconds
+            setTimeout(() => {
+                statusElement.style.display = 'none';
+            }, 5000);
+        }
+        
+        function showMockDiff() {
+            const originalCode = \`// Original Converge API code
+const converge = require('converge-api');
+
+async function processPayment(paymentData) {
+    const result = await converge.processPayment({
+        ssl_merchant_id: paymentData.merchantId,
+        ssl_user_id: paymentData.userId,
+        ssl_pin: paymentData.pin,
+        ssl_transaction_type: 'ccsale',
+        ssl_card_number: paymentData.cardNumber,
+        ssl_exp_date: paymentData.expDate,
+        ssl_amount: paymentData.amount
+    });
+    
+    return result;
+}\`;
+
+            const generatedCode = \`// Migrated Elavon L1 API code
+const { ElavonL1Client } = require('@elavon/l1-api');
+
+async function processPayment(paymentData) {
+    const client = new ElavonL1Client({
+        merchantId: paymentData.merchantId,
+        apiKey: process.env.ELAVON_API_KEY,
+        apiSecret: process.env.ELAVON_API_SECRET
+    });
+    
+    const result = await client.payments.create({
+        amount: paymentData.amount,
+        currency: 'USD',
+        payment_method: {
+            type: 'card',
+            card: {
+                number: paymentData.cardNumber,
+                exp_month: paymentData.expDate.substring(0, 2),
+                exp_year: paymentData.expDate.substring(2, 4)
+            }
+        }
+    });
+    
+    return result;
+}\`;
+
+            showDiff(originalCode, generatedCode);
+            showExplanation('Converted Converge API processPayment call to Elavon L1 API. Key changes: 1) Updated authentication method to use API key/secret, 2) Changed parameter structure to match L1 API schema, 3) Updated response handling for new API format.');
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+{
+  "name": "l1x-elavonx-migrator",
+  "displayName": "L1X ElavonX Migrator",
+  "description": "VS Code extension to migrate legacy Converge API integrations to modern Elavon L1 APIs",
+  "version": "0.1.0",
+  "publisher": "elavon",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "elavon",
+    "converge",
+    "migration",
+    "api",
+    "l1x"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:l1x.scanPanel",
+    "onView:l1x.credentialsPanel",
+    "onView:l1x.docsPanel",
+    "onView:l1x.migrationPanel"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "l1x-container",
+          "title": "L1X Migrator",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "l1x-container": [
+        {
+          "id": "l1x.scanPanel",
+          "name": "Project Scan",
+          "type": "tree"
+        },
+        {
+          "id": "l1x.credentialsPanel",
+          "name": "Credentials",
+          "type": "tree"
+        },
+        {
+          "id": "l1x.docsPanel",
+          "name": "Documentation",
+          "type": "tree"
+        },
+        {
+          "id": "l1x.migrationPanel",
+          "name": "Migration",
+          "type": "tree"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "l1x.scanProject",
+        "title": "Scan Project",
+        "icon": "$(search)"
+      },
+      {
+        "command": "l1x.reScan",
+        "title": "Re-Scan",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "l1x.refresh",
+        "title": "Refresh",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "l1x.viewSummary",
+        "title": "View Summary",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "l1x.addCredential",
+        "title": "Add Credential",
+        "icon": "$(add)"
+      },
+      {
+        "command": "l1x.testConnection",
+        "title": "Test Connection",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "l1x.exportCredentials",
+        "title": "Export",
+        "icon": "$(export)"
+      },
+      {
+        "command": "l1x.importCredentials",
+        "title": "Import",
+        "icon": "$(import)"
+      },
+      {
+        "command": "l1x.addSpec",
+        "title": "Add Spec",
+        "icon": "$(add)"
+      },
+      {
+        "command": "l1x.compareSpecs",
+        "title": "Compare Specs",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "l1x.generateMapping",
+        "title": "Generate Mapping",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "l1x.generatePreview",
+        "title": "Generate Preview",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "l1x.apply",
+        "title": "Apply",
+        "icon": "$(check)"
+      },
+      {
+        "command": "l1x.rollback",
+        "title": "Rollback",
+        "icon": "$(discard)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "l1x.scanProject",
+          "when": "view == l1x.scanPanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "l1x.reScan",
+          "when": "view == l1x.scanPanel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "l1x.refresh",
+          "when": "view == l1x.scanPanel",
+          "group": "navigation@3"
+        },
+        {
+          "command": "l1x.viewSummary",
+          "when": "view == l1x.scanPanel",
+          "group": "navigation@4"
+        },
+        {
+          "command": "l1x.addCredential",
+          "when": "view == l1x.credentialsPanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "l1x.testConnection",
+          "when": "view == l1x.credentialsPanel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "l1x.exportCredentials",
+          "when": "view == l1x.credentialsPanel",
+          "group": "navigation@3"
+        },
+        {
+          "command": "l1x.importCredentials",
+          "when": "view == l1x.credentialsPanel",
+          "group": "navigation@4"
+        },
+        {
+          "command": "l1x.addSpec",
+          "when": "view == l1x.docsPanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "l1x.compareSpecs",
+          "when": "view == l1x.docsPanel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "l1x.generateMapping",
+          "when": "view == l1x.docsPanel",
+          "group": "navigation@3"
+        },
+        {
+          "command": "l1x.generatePreview",
+          "when": "view == l1x.migrationPanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "l1x.apply",
+          "when": "view == l1x.migrationPanel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "l1x.rollback",
+          "when": "view == l1x.migrationPanel",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "l1x.addCredential",
+          "when": "view == l1x.credentialsPanel && viewItem == credentialEnvironment",
+          "group": "inline@1"
+        },
+        {
+          "command": "l1x.testConnection",
+          "when": "view == l1x.credentialsPanel && viewItem == credentialSet",
+          "group": "inline@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.4",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.1",
+    "ts-loader": "^9.4.1",
+    "@types/jest": "^29.2.4",
+    "jest": "^29.3.1",
+    "ts-jest": "^29.0.3",
+    "@vscode/test-electron": "^2.2.0"
+  },
+  "dependencies": {
+    "axios": "^1.2.0"
+  }
+}

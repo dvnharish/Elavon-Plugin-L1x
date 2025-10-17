@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+    <title>L1X Documentation</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-editor-background);
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .header {
+            margin-bottom: 20px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 8px 16px;
+            border: 1px solid var(--vscode-button-border);
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: var(--vscode-font-size);
+        }
+        
+        button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+        
+        .split-pane {
+            display: flex;
+            height: 400px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 3px;
+        }
+        
+        .pane {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        
+        .pane:first-child {
+            border-right: 1px solid var(--vscode-panel-border);
+        }
+        
+        .pane h4 {
+            margin-top: 0;
+            color: var(--vscode-focusBorder);
+        }
+        
+        .spec-placeholder {
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
+            text-align: center;
+            padding: 50px 20px;
+        }
+        
+        .spec-tree {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .spec-tree li {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        
+        .spec-tree li:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        
+        .endpoint {
+            font-weight: bold;
+            color: var(--vscode-symbolIcon-functionForeground);
+        }
+        
+        .field {
+            margin-left: 20px;
+            color: var(--vscode-symbolIcon-propertyForeground);
+        }
+        
+        .required {
+            color: var(--vscode-testing-iconFailed);
+        }
+        
+        .optional {
+            color: var(--vscode-descriptionForeground);
+        }
+        
+        .mapping-status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 3px;
+            background-color: var(--vscode-textBlockQuote-background);
+            border-left: 3px solid var(--vscode-focusBorder);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h3>API Documentation & Mapping</h3>
+        <div class="button-group">
+            <button onclick="addSpec()">Add Spec</button>
+            <button onclick="compareSpecs()">Compare Specs</button>
+            <button onclick="generateMapping()">Generate Mapping</button>
+        </div>
+    </div>
+    
+    <div class="split-pane">
+        <div class="pane">
+            <h4>Converge API Specification</h4>
+            <div id="converge-spec">
+                <div class="spec-placeholder">
+                    No Converge specification loaded.<br>
+                    Click "Add Spec" to load a specification.
+                </div>
+            </div>
+        </div>
+        
+        <div class="pane">
+            <h4>Elavon L1 API Specification</h4>
+            <div id="l1-spec">
+                <div class="spec-placeholder">
+                    No L1 specification loaded.<br>
+                    Click "Add Spec" to load a specification.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mapping-status">
+        <strong>Mapping Status:</strong> <span id="mapping-status">No mappings generated</span>
+    </div>
+
+    <script>
+        // Get VS Code API
+        const vscode = acquireVsCodeApi();
+        
+        function addSpec() {
+            vscode.postMessage({
+                command: 'addSpec'
+            });
+        }
+        
+        function compareSpecs() {
+            vscode.postMessage({
+                command: 'compareSpecs'
+            });
+        }
+        
+        function generateMapping() {
+            vscode.postMessage({
+                command: 'generateMapping'
+            });
+        }
+        
+        // Listen for messages from the extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            
+            switch (message.command) {
+                case 'loadSpec':
+                    loadSpec(message.type, message.spec);
+                    break;
+                case 'updateMappingStatus':
+                    updateMappingStatus(message.status);
+                    break;
+                case 'showMockSpecs':
+                    showMockSpecs();
+                    break;
+            }
+        });
+        
+        function loadSpec(type, spec) {
+            const container = document.getElementById(`${type}-spec`);
+            container.innerHTML = `
+                <ul class="spec-tree">
+                    <li class="endpoint">POST /payments</li>
+                    <li class="field required">amount (required)</li>
+                    <li class="field required">currency (required)</li>
+                    <li class="field optional">description (optional)</li>
+                    <li class="endpoint">GET /payments/{id}</li>
+                    <li class="field required">id (required)</li>
+                    <li class="endpoint">POST /refunds</li>
+                    <li class="field required">payment_id (required)</li>
+                    <li class="field optional">amount (optional)</li>
+                </ul>
+            `;
+        }
+        
+        function updateMappingStatus(status) {
+            document.getElementById('mapping-status').textContent = status;
+        }
+        
+        function showMockSpecs() {
+            loadSpec('converge', {});
+            loadSpec('l1', {});
+            updateMappingStatus('Mock specifications loaded - Phase 4 will implement real mapping');
+        }
+        
+        // Show mock data on load
+        setTimeout(showMockSpecs, 500);
+    </script>
+</body>
+</html>
