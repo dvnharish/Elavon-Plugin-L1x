@@ -35,6 +35,33 @@ export function activate(context: vscode.ExtensionContext) {
         });
         container.register(SERVICE_TOKENS.COPILOT_SERVICE, () => new (require('./services/CopilotService').CopilotService)());
         
+        // Register OpenAPI comparison services
+        container.register(SERVICE_TOKENS.SPEC_DIFF_ENGINE, () => new (require('./services/SpecDiffEngine').SpecDiffEngine)());
+        container.register(SERVICE_TOKENS.FIELD_MAPPING_SERVICE, () => new (require('./services/FieldMappingService').FieldMappingService)());
+        container.register(SERVICE_TOKENS.SPEC_COMPARISON_SERVICE, (container) => {
+            const openApiService = container.get(SERVICE_TOKENS.OPENAPI_SERVICE);
+            const specDiffEngine = container.get(SERVICE_TOKENS.SPEC_DIFF_ENGINE);
+            const fieldMappingService = container.get(SERVICE_TOKENS.FIELD_MAPPING_SERVICE);
+            const fileStandardAnalyzer = container.get(SERVICE_TOKENS.FILE_STANDARD_ANALYZER);
+            return new (require('./services/SpecComparisonService').SpecComparisonService)(
+                openApiService, specDiffEngine, fieldMappingService, fileStandardAnalyzer
+            );
+        });
+        
+        // Register validation services
+        container.register(SERVICE_TOKENS.VALIDATION_ENGINE, () => new (require('./services/ValidationEngine').ValidationEngine)());
+        
+        // Register infrastructure services
+        const { PerformanceMonitor } = require('./utils/PerformanceMonitor');
+        const { ErrorRecoveryManager } = require('./utils/ErrorRecovery');
+        
+        const performanceMonitor = new PerformanceMonitor(context);
+        const errorRecovery = new ErrorRecoveryManager();
+        
+        // Make infrastructure services available globally
+        (global as any).performanceMonitor = performanceMonitor;
+        (global as any).errorRecovery = errorRecovery;
+        
         // Register commands
         commandRegistry = new CommandRegistry(context);
         commandRegistry.registerAllCommands();

@@ -1,12 +1,16 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { EventEmitter } from 'events';
+import { OpenApiService } from './OpenApiService';
+import { ApiMappingService, ApiMapping, VariableMapping } from './ApiMappingService';
+import { Logger } from '../utils/logger';
 
 export interface ScanOptions {
-  mode: 'regex' | 'ast' | 'dto';
+  mode: 'regex' | 'ast' | 'dto' | 'openapi';
   languages: string[];
   excludePatterns: string[];
   includePatterns: string[];
+  useOpenApiMapping?: boolean;
 }
 
 export interface ScanResult {
@@ -17,16 +21,20 @@ export interface ScanResult {
   snippet: string;
   matchedText: string;
   confidence: number;
-  endpointType: 'transaction' | 'payment' | 'refund' | 'auth' | 'dto' | 'endpoint' | 'class' | 'unknown';
+  endpointType: 'transaction' | 'payment' | 'refund' | 'auth' | 'dto' | 'endpoint' | 'class' | 'variable' | 'url' | 'unknown';
   language: string;
   framework?: string;
   createdAt: Date;
-  scanType: 'regex' | 'ast' | 'dto';
+  scanType: 'regex' | 'ast' | 'dto' | 'openapi';
   className?: string;
   methodName?: string;
   endpointUrl?: string;
   dtoName?: string;
-  businessLogicType?: 'api-call' | 'endpoint-definition' | 'data-model' | 'service-class';
+  variableName?: string;
+  businessLogicType?: 'api-call' | 'endpoint-definition' | 'data-model' | 'service-class' | 'configuration' | 'credential';
+  apiMapping?: ApiMapping | undefined;
+  suggestedMigration?: string | undefined;
+  migrationNotes?: string[] | undefined;
 }
 
 export interface ScanProgress {
@@ -69,7 +77,13 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     '**/*.bundle.js'
   ];
 
+  private openApiService: OpenApiService;
+  private apiMappingService: ApiMappingService;
+  private apiMappings: ApiMapping[] = [];
+  private variableMappings: VariableMapping[] = [];
+
   // Enhanced Converge API patterns for different scan types and languages
+  // Now includes OpenAPI-aware patterns and variable mappings
   private readonly convergePatterns = {
     // JavaScript/TypeScript patterns
     javascript: {
@@ -83,7 +97,13 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
         // Configuration patterns
         /(?:converge|cvg)\.(?:config|merchantId|apiKey|apiSecret)\s*[=:]/gi,
         // Import/require patterns
-        /(?:import|require)\s*.*(?:converge|cvg)/gi
+        /(?:import|require)\s*.*(?:converge|cvg)/gi,
+        // Converge variable patterns (ssl_ prefixed)
+        /ssl_(?:merchant_id|user_id|pin|amount|card_number|exp_date|cvv2cvc2|transaction_type|result|txn_id|approval_code)/gi,
+        // Base URL patterns
+        /['"`]https?:\/\/(?:api\.)?(?:demo\.)?convergepay\.com[^'"`]*['"`]/gi,
+        // Elavon L1 patterns
+        /['"`]https?:\/\/(?:api\.)?(?:uat\.)?(?:eu\.)?convergepay\.com[^'"`]*['"`]/gi
       ],
       ast: [
         // Service class definitions with Converge
@@ -103,7 +123,19 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
         // Payment/Transaction data structures
         /(?:interface|class|type)\s+(\w*(?:Payment|Transaction|Refund|Auth)\w*(?:DTO|Dto|Model|Request|Response|Data)\w*)/gi,
         // Property patterns in DTOs
-        /(?:merchantId|apiKey|transactionId|paymentId|amount|currency)\s*[?:]?\s*(?:string|number)/gi
+        /(?:merchantId|apiKey|transactionId|paymentId|amount|currency)\s*[?:]?\s*(?:string|number)/gi,
+        // Converge-specific DTO properties
+        /(?:ssl_merchant_id|ssl_user_id|ssl_pin|ssl_amount|ssl_card_number|ssl_exp_date|ssl_cvv2cvc2|ssl_transaction_type|ssl_result|ssl_txn_id)\s*[?:]?\s*(?:string|number)/gi,
+        // Elavon L1 DTO properties
+        /(?:total|card|doCapture|state|transactionId|merchantId|userId|apiKey)\s*[?:]?\s*(?:string|number|boolean|object)/gi
+      ],
+      openapi: [
+        // OpenAPI-aware patterns for endpoint detection
+        /\/(?:transactions|payments|refunds|auth|hosted-cards|payment-sessions)[\/\w-]*/gi,
+        // OpenAPI schema references
+        /\$ref\s*:\s*['"`]#\/components\/schemas\/(\w+)['"`]/gi,
+        // OpenAPI operation IDs
+        /operationId\s*:\s*['"`](\w+)['"`]/gi
       ]
     },
     // Java patterns
@@ -114,7 +146,11 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
         // API method patterns
         /(?:Converge|CVG)\.(?:transaction|payment|refund|auth)\.(?:create|process|submit|execute)/gi,
         // Configuration patterns
-        /(?:@Value|@ConfigurationProperties).*(?:converge|cvg)/gi
+        /(?:@Value|@ConfigurationProperties).*(?:converge|cvg)/gi,
+        // Converge variable patterns
+        /"ssl_(?:merchant_id|user_id|pin|amount|card_number|exp_date|cvv2cvc2|transaction_type|result|txn_id|approval_code)"/gi,
+        // Base URL patterns
+        /"https?:\/\/(?:api\.)?(?:demo\.)?convergepay\.com[^"]*"/gi
       ],
       ast: [
         // Class definitions
@@ -132,7 +168,9 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
         // Entity annotations
         /(?:@Entity|@Table|@Document)\s*(?:\([^)]*\))?\s*(?:public\s+)?class\s+(\w+)/gi,
         // Field patterns
-        /(?:private|public)\s+(?:String|Long|Integer|BigDecimal)\s+(?:merchantId|apiKey|transactionId|paymentId|amount)/gi
+        /(?:private|public)\s+(?:String|Long|Integer|BigDecimal)\s+(?:merchantId|apiKey|transactionId|paymentId|amount)/gi,
+        // Converge-specific field patterns
+        /(?:private|public)\s+String\s+(?:sslMerchantId|sslUserId|sslPin|sslAmount|sslCardNumber|sslExpDate|sslCvv2Cvc2|sslTransactionType|sslResult|sslTxnId)/gi
       ]
     },
     // C# patterns
@@ -267,6 +305,21 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
 
   constructor() {
     super();
+    this.openApiService = new OpenApiService();
+    this.apiMappingService = new ApiMappingService();
+    this.initializeApiMappings();
+  }
+
+  private async initializeApiMappings(): Promise<void> {
+    try {
+      Logger.info('Initializing API mappings for enhanced scanning');
+      this.apiMappings = await this.apiMappingService.generateApiMappings();
+      this.variableMappings = this.apiMappingService.getVariableMappings();
+      Logger.info(`Loaded ${this.apiMappings.length} API mappings and ${this.variableMappings.length} variable mappings`);
+    } catch (error) {
+      Logger.error('Failed to initialize API mappings', error as Error);
+      // Continue with basic scanning if mappings fail to load
+    }
   }
 
   async scanProject(options: ScanOptions): Promise<ScanResult[]> {
@@ -443,6 +496,9 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
         case 'dto':
           patterns = languagePatterns.dto || [];
           break;
+        case 'openapi':
+          patterns = [...(languagePatterns.regex || []), ...(languagePatterns.openapi || [])];
+          break;
         default:
           patterns = languagePatterns.regex || [];
       }
@@ -460,7 +516,7 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     }
   }
 
-  private findMatches(content: string, pattern: RegExp, filePath: string, language: string, scanType: 'regex' | 'ast' | 'dto'): ScanResult[] {
+  private findMatches(content: string, pattern: RegExp, filePath: string, language: string, scanType: 'regex' | 'ast' | 'dto' | 'openapi'): ScanResult[] {
     const results: ScanResult[] = [];
     const lines = content.split('\n');
     
@@ -486,6 +542,10 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
         // Extract additional information based on scan type
         const additionalInfo = this.extractAdditionalInfo(matchedText, line, scanType);
 
+        // Find API mapping if available
+        const apiMapping = this.findApiMapping(matchedText);
+        const migrationInfo = apiMapping ? this.generateMigrationInfo(apiMapping, language) : undefined;
+
         results.push({
           id: `${filePath}:${lineIndex + 1}:${match.index}:${Date.now()}`,
           filePath,
@@ -498,6 +558,9 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
           language,
           createdAt: new Date(),
           scanType,
+          apiMapping: apiMapping ?? undefined,
+          suggestedMigration: migrationInfo?.code ?? undefined,
+          migrationNotes: migrationInfo?.notes ?? undefined,
           ...additionalInfo
         });
         
@@ -525,8 +588,13 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     return null;
   }
 
-  private classifyEndpointType(matchedText: string): 'transaction' | 'payment' | 'refund' | 'auth' | 'dto' | 'endpoint' | 'class' | 'unknown' {
+  private classifyEndpointType(matchedText: string): 'transaction' | 'payment' | 'refund' | 'auth' | 'dto' | 'endpoint' | 'class' | 'variable' | 'url' | 'unknown' {
     const text = matchedText.toLowerCase();
+    
+    // Check for Converge variables first
+    if (text.includes('ssl_')) {
+      return 'variable';
+    }
     
     if (text.includes('transaction')) {
       return 'transaction';
@@ -543,7 +611,10 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     if (text.includes('dto') || text.includes('model') || text.includes('request') || text.includes('response')) {
       return 'dto';
     }
-    if (text.includes('http') || text.includes('endpoint') || text.includes('url')) {
+    if (text.includes('http') || text.includes('://')) {
+      return 'url';
+    }
+    if (text.includes('endpoint') || text.includes('/api/') || text.includes('/v1/')) {
       return 'endpoint';
     }
     if (text.includes('class') || text.includes('service') || text.includes('controller')) {
@@ -553,15 +624,23 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     return 'unknown';
   }
 
-  private extractAdditionalInfo(matchedText: string, line: string, scanType: 'regex' | 'ast' | 'dto'): Partial<ScanResult> {
+  private extractAdditionalInfo(matchedText: string, line: string, scanType: 'regex' | 'ast' | 'dto' | 'openapi'): Partial<ScanResult> {
     const info: Partial<ScanResult> = {};
 
     switch (scanType) {
       case 'regex':
+      case 'openapi':
         // Extract endpoint URLs
         const urlMatch = matchedText.match(/https?:\/\/[^\s"'`]+/);
         if (urlMatch) {
           info.endpointUrl = urlMatch[0];
+        }
+
+        // Extract Converge variables
+        const variableMatch = matchedText.match(/ssl_(\w+)/);
+        if (variableMatch && variableMatch[1]) {
+          info.variableName = `ssl_${variableMatch[1]}`;
+          info.businessLogicType = 'credential';
         }
         break;
 
@@ -583,6 +662,11 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
         // Detect endpoint definitions
         if (line.includes('@') && (line.includes('Post') || line.includes('Get') || line.includes('Put') || line.includes('Delete'))) {
           info.businessLogicType = 'endpoint-definition';
+        }
+
+        // Detect configuration
+        if (line.includes('config') || line.includes('Config') || line.includes('@Value')) {
+          info.businessLogicType = 'configuration';
         }
         break;
 
@@ -663,5 +747,69 @@ export class CodeScannerService extends EventEmitter implements ICodeScannerServ
     }
     
     return undefined;
+  }
+
+  private findApiMapping(matchedText: string): ApiMapping | null {
+    // First check if we have API mappings loaded
+    if (this.apiMappings.length === 0) {
+      return null;
+    }
+
+    // Try to find a direct mapping
+    const directMapping = this.apiMappingService.findConvergeToElavonMapping(matchedText);
+    if (directMapping) {
+      return directMapping;
+    }
+
+    // Check variable mappings
+    const variableMapping = this.variableMappings.find(vm => 
+      matchedText.toLowerCase().includes(vm.convergeVariable.toLowerCase())
+    );
+
+    if (variableMapping) {
+      return {
+        convergeEndpoint: variableMapping.convergeVariable,
+        elavonEndpoint: variableMapping.elavonVariable,
+        confidence: variableMapping.confidence,
+        mappingType: 'exact',
+        fieldMappings: [],
+        transformationRequired: true,
+        migrationNotes: [variableMapping.description, variableMapping.example || '']
+      };
+    }
+
+    return null;
+  }
+
+  private generateMigrationInfo(mapping: ApiMapping, language: string): { code: string; notes: string[] } {
+    const code = this.apiMappingService.generateMigrationCode(mapping, language);
+    const notes = [
+      `Confidence: ${Math.round(mapping.confidence * 100)}%`,
+      `Mapping Type: ${mapping.mappingType}`,
+      ...mapping.migrationNotes
+    ];
+
+    return { code, notes };
+  }
+
+  /**
+   * Get available API mappings for display in UI
+   */
+  getApiMappings(): ApiMapping[] {
+    return [...this.apiMappings];
+  }
+
+  /**
+   * Get available variable mappings for display in UI
+   */
+  getVariableMappings(): VariableMapping[] {
+    return [...this.variableMappings];
+  }
+
+  /**
+   * Refresh API mappings (useful when OpenAPI specs are updated)
+   */
+  async refreshApiMappings(): Promise<void> {
+    await this.initializeApiMappings();
   }
 }

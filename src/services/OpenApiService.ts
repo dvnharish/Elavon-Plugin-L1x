@@ -30,6 +30,20 @@ export class OpenApiService {
     }
   }
 
+  async loadConvergeSpec(): Promise<any> {
+    if (!this.convergeSpec) {
+      await this.loadSpecs();
+    }
+    return this.convergeSpec;
+  }
+
+  async loadElavonSpec(): Promise<any> {
+    if (!this.elavonSpec) {
+      await this.loadSpecs();
+    }
+    return this.elavonSpec;
+  }
+
   async getRelevantSections(detectedStandard?: StandardDetectionResult): Promise<OpenApiSpecSection[]> {
     await this.loadSpecs();
     

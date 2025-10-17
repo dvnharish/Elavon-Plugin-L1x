@@ -66,6 +66,17 @@ export class CommandRegistry {
     this.registerCommand('l1x.compareOpenAPISpecs', (item?: any) => this.handleCompareOpenAPISpecs(item));
     this.registerCommand('l1x.validateElavonCompliance', (item?: any) => this.handleValidateElavonCompliance(item));
     this.registerCommand('l1x.batchDetectStandards', () => this.handleBatchDetectStandards());
+    this.registerCommand('l1x.batchValidateCompliance', () => this.handleBatchValidateCompliance());
+
+    // New Enhanced Commands
+    this.registerCommand('l1x.generateL1EquivalentCode', (item?: any) => this.handleGenerateL1EquivalentCode(item));
+    this.registerCommand('l1x.showApiMapping', (item?: any) => this.handleShowApiMapping(item));
+    this.registerCommand('l1x.generateL1DTOs', (item?: any) => this.handleGenerateL1DTOs(item));
+    this.registerCommand('l1x.openDocumentation', (item?: any) => this.handleOpenDocumentation(item));
+    this.registerCommand('l1x.toggleView', () => this.handleToggleView());
+    this.registerCommand('l1x.generateMigrationReport', () => this.handleGenerateMigrationReport());
+    this.registerCommand('l1x.exportApiMappings', () => this.handleExportApiMappings());
+    this.registerCommand('l1x.showMigrationCandidates', () => this.handleShowMigrationCandidates());
   }
 
   private registerCommand(command: string, callback: (...args: any[]) => void): void {
@@ -455,6 +466,122 @@ export class CommandRegistry {
     
     if (this.scanPanel && this.scanPanel.batchDetectStandards) {
       await this.scanPanel.batchDetectStandards();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleBatchValidateCompliance(): Promise<void> {
+    Logger.buttonClicked('batchValidateCompliance');
+    
+    if (this.scanPanel && this.scanPanel.batchValidateCompliance) {
+      await this.scanPanel.batchValidateCompliance();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  // New Enhanced Command Handlers
+  private async handleGenerateL1EquivalentCode(item?: any): Promise<void> {
+    Logger.buttonClicked('generateL1EquivalentCode');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No item selected for L1 code generation');
+      return;
+    }
+
+    if (this.scanPanel && this.scanPanel.generateL1EquivalentCode) {
+      await this.scanPanel.generateL1EquivalentCode(item);
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleShowApiMapping(item?: any): Promise<void> {
+    Logger.buttonClicked('showApiMapping');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No item selected for API mapping');
+      return;
+    }
+
+    if (this.scanPanel && this.scanPanel.showApiMapping) {
+      await this.scanPanel.showApiMapping(item);
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleGenerateL1DTOs(item?: any): Promise<void> {
+    Logger.buttonClicked('generateL1DTOs');
+    
+    if (!item) {
+      vscode.window.showWarningMessage('No item selected for DTO generation');
+      return;
+    }
+
+    if (this.scanPanel && this.scanPanel.generateL1DTOs) {
+      await this.scanPanel.generateL1DTOs(item);
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleOpenDocumentation(item?: any): Promise<void> {
+    Logger.buttonClicked('openDocumentation');
+    
+    if (this.scanPanel && this.scanPanel.openDocumentation) {
+      await this.scanPanel.openDocumentation(item);
+    } else {
+      // Fallback to general documentation
+      await vscode.env.openExternal(vscode.Uri.parse('https://developer.elavon.com/docs/epg'));
+    }
+  }
+
+  private handleToggleView(): void {
+    Logger.buttonClicked('toggleView');
+    
+    if (this.scanPanel && this.scanPanel.toggleView) {
+      this.scanPanel.toggleView();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleGenerateMigrationReport(): Promise<void> {
+    Logger.buttonClicked('generateMigrationReport');
+    
+    // Use the ScanPanelCommands class for this functionality
+    const { ScanPanelCommands } = await import('./ScanPanelCommands');
+    if (this.scanPanel) {
+      const scanPanelCommands = new ScanPanelCommands(this.scanPanel);
+      await scanPanelCommands['generateMigrationReport']();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleExportApiMappings(): Promise<void> {
+    Logger.buttonClicked('exportApiMappings');
+    
+    // Use the ScanPanelCommands class for this functionality
+    const { ScanPanelCommands } = await import('./ScanPanelCommands');
+    if (this.scanPanel) {
+      const scanPanelCommands = new ScanPanelCommands(this.scanPanel);
+      await scanPanelCommands['exportApiMappings']();
+    } else {
+      vscode.window.showErrorMessage('Scan panel not available');
+    }
+  }
+
+  private async handleShowMigrationCandidates(): Promise<void> {
+    Logger.buttonClicked('showMigrationCandidates');
+    
+    // Use the ScanPanelCommands class for this functionality
+    const { ScanPanelCommands } = await import('./ScanPanelCommands');
+    if (this.scanPanel) {
+      const scanPanelCommands = new ScanPanelCommands(this.scanPanel);
+      await scanPanelCommands['showMigrationCandidates']();
     } else {
       vscode.window.showErrorMessage('Scan panel not available');
     }

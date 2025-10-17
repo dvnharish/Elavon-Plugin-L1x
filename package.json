@@ -2,7 +2,7 @@
   "name": "l1x-elavonx-migrator",
   "displayName": "L1X ElavonX Migrator",
   "description": "VS Code extension to migrate legacy Converge API integrations to modern Elavon L1 APIs",
-  "version": "0.6.1",
+  "version": "1.1.0",
   "publisher": "elavon",
   "repository": {
     "type": "git",
@@ -149,6 +149,46 @@
         "icon": "$(eye)"
       },
       {
+        "command": "l1x.generateL1EquivalentCode",
+        "title": "Generate L1 Equivalent Code",
+        "icon": "$(code)"
+      },
+      {
+        "command": "l1x.showApiMapping",
+        "title": "Show API Mapping (Converge → L1)",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "l1x.generateL1DTOs",
+        "title": "Generate L1 DTOs/POJOs from OpenAPI",
+        "icon": "$(symbol-class)"
+      },
+      {
+        "command": "l1x.openDocumentation",
+        "title": "Open Documentation",
+        "icon": "$(book)"
+      },
+      {
+        "command": "l1x.toggleView",
+        "title": "Toggle View",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "l1x.generateMigrationReport",
+        "title": "Generate Migration Report",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "l1x.exportApiMappings",
+        "title": "Export API Mappings",
+        "icon": "$(export)"
+      },
+      {
+        "command": "l1x.showMigrationCandidates",
+        "title": "Show Migration Candidates",
+        "icon": "$(list-ordered)"
+      },
+      {
         "command": "l1x.apply",
         "title": "Apply",
         "icon": "$(check)"
@@ -197,6 +237,16 @@
         "command": "l1x.batchDetectStandards",
         "title": "Detect Standards for All Files",
         "icon": "$(checklist)"
+      },
+      {
+        "command": "l1x.validateElavonCompliance",
+        "title": "🧪 Validate Elavon Compliance",
+        "icon": "$(check)"
+      },
+      {
+        "command": "l1x.batchValidateCompliance",
+        "title": "Validate All Files for Compliance",
+        "icon": "$(checklist)"
       }
     ],
     "menus": {
@@ -230,6 +280,26 @@
           "command": "l1x.clearResults",
           "when": "view == l1x.scanPanel",
           "group": "navigation@6"
+        },
+        {
+          "command": "l1x.toggleView",
+          "when": "view == l1x.scanPanel",
+          "group": "navigation@7"
+        },
+        {
+          "command": "l1x.generateMigrationReport",
+          "when": "view == l1x.scanPanel",
+          "group": "reports@1"
+        },
+        {
+          "command": "l1x.exportApiMappings",
+          "when": "view == l1x.scanPanel",
+          "group": "reports@2"
+        },
+        {
+          "command": "l1x.showMigrationCandidates",
+          "when": "view == l1x.scanPanel",
+          "group": "reports@3"
         },
         {
           "command": "l1x.addCredential",
@@ -339,6 +409,26 @@
           "group": "standards@4"
         },
         {
+          "command": "l1x.generateL1EquivalentCode",
+          "when": "view == l1x.scanPanel && (viewItem == scanFile || viewItem == scanOccurrence || viewItem == projectFile || viewItem == projectMethod || viewItem == projectClass || viewItem == projectVariable)",
+          "group": "l1migration@1"
+        },
+        {
+          "command": "l1x.showApiMapping",
+          "when": "view == l1x.scanPanel && (viewItem == scanOccurrence || viewItem == projectVariable || viewItem == projectEndpoint)",
+          "group": "l1migration@2"
+        },
+        {
+          "command": "l1x.generateL1DTOs",
+          "when": "view == l1x.scanPanel && (viewItem == scanFile || viewItem == projectFile)",
+          "group": "l1migration@3"
+        },
+        {
+          "command": "l1x.openDocumentation",
+          "when": "view == l1x.scanPanel && (viewItem == scanFile || viewItem == scanOccurrence || viewItem == projectFile || viewItem == projectMethod || viewItem == projectClass || viewItem == projectVariable || viewItem == projectEndpoint)",
+          "group": "l1migration@4"
+        },
+        {
           "command": "l1x.validateElavonCompliance",
           "when": "view == l1x.scanPanel && viewItem == scanFile",
           "group": "standards@5"
@@ -347,6 +437,11 @@
           "command": "l1x.batchDetectStandards",
           "when": "view == l1x.scanPanel && viewItem == scanSummary",
           "group": "standards@1"
+        },
+        {
+          "command": "l1x.batchValidateCompliance",
+          "when": "view == l1x.scanPanel && viewItem == scanSummary",
+          "group": "standards@2"
         },
         {
           "command": "l1x.addCredential",
